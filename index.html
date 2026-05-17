@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StreamVault — จัดการบัญชีสตรีมมิ่ง</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0a0a0f; --surface:#12121a; --surface2:#1a1a26;
+    --border:#2a2a3d; --accent:#6c63ff; --accent2:#ff6584;
+    --accent3:#43e97b; --warn:#ffd166; --text:#e8e8f0;
+    --muted:#6b6b8a; --danger:#ff4757;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Sarabun',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; overflow-x:hidden; }
+  body::before { content:''; position:fixed; inset:0; background-image:linear-gradient(rgba(108,99,255,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(108,99,255,0.04) 1px,transparent 1px); background-size:40px 40px; pointer-events:none; z-index:0; }
+  .app { position:relative; z-index:1; max-width:1200px; margin:0 auto; padding:24px 16px; }
+
+  header { display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; padding-bottom:20px; border-bottom:1px solid var(--border); }
+  .logo { display:flex; align-items:center; gap:10px; }
+  .logo-icon { width:36px; height:36px; background:linear-gradient(135deg,var(--accent),var(--accent2)); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; }
+  .logo h1 { font-size:20px; font-weight:700; letter-spacing:-0.5px; }
+  .logo span { color:var(--accent); }
+  .header-right { display:flex; gap:10px; align-items:center; }
+
+  .bell-btn { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 14px; color:var(--muted); font-size:13px; cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:7px; font-family:'Sarabun',sans-serif; }
+  .bell-btn:hover { border-color:var(--warn); color:var(--warn); }
+  .bell-btn.on { border-color:var(--accent3); color:var(--accent3); background:rgba(67,233,123,0.07); }
+  .bell-dot { width:7px; height:7px; border-radius:50%; background:var(--accent3); display:none; }
+  .bell-btn.on .bell-dot { display:inline-block; animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .notif-panel { background:var(--surface); border:1px solid var(--accent); border-radius:14px; padding:20px 22px; margin-bottom:20px; display:none; animation:fadeDown 0.2s ease; }
+  .notif-panel.open { display:block; }
+  @keyframes fadeDown { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+  .notif-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .notif-top h3 { font-size:15px; font-weight:700; }
+  .notif-badge { font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; }
+  .notif-badge.on { background:rgba(67,233,123,0.15); color:var(--accent3); }
+  .notif-badge.off { background:rgba(107,107,138,0.15); color:var(--muted); }
+  .notif-badge.denied { background:rgba(255,71,87,0.15); color:var(--danger); }
+  .notif-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .notif-row label { font-size:13px; color:var(--muted); white-space:nowrap; }
+  .notif-select { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; color:var(--text); font-family:'Sarabun',sans-serif; font-size:13px; outline:none; cursor:pointer; }
+  .notif-hint { font-size:12px; color:var(--muted); background:var(--surface2); border-radius:8px; padding:10px 14px; border-left:3px solid var(--accent); }
+
+  .stats-bar { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:28px; }
+  .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; position:relative; overflow:hidden; transition:transform 0.2s,border-color 0.2s; }
+  .stat-card:hover { transform:translateY(-2px); border-color:var(--accent); }
+  .stat-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+  .stat-card.blue::before{background:var(--accent)} .stat-card.pink::before{background:var(--accent2)} .stat-card.green::before{background:var(--accent3)} .stat-card.yellow::before{background:var(--warn)}
+  .stat-label { font-size:11px; color:var(--muted); margin-bottom:6px; letter-spacing:0.5px; text-transform:uppercase; }
+  .stat-value { font-size:26px; font-weight:700; font-family:'IBM Plex Mono',monospace; }
+  .stat-card.blue .stat-value{color:var(--accent)} .stat-card.pink .stat-value{color:var(--accent2)} .stat-card.green .stat-value{color:var(--accent3)} .stat-card.yellow .stat-value{color:var(--warn)}
+
+  .tabs { display:flex; gap:4px; margin-bottom:20px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:4px; width:fit-content; }
+  .tab-btn { background:none; border:none; border-radius:7px; padding:8px 18px; color:var(--muted); font-family:'Sarabun',sans-serif; font-size:14px; cursor:pointer; transition:all 0.2s; }
+  .tab-btn.active { background:var(--accent); color:white; font-weight:600; }
+
+  .toolbar { display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; align-items:center; }
+  .search-box { flex:1; min-width:200px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 14px; color:var(--text); font-family:'Sarabun',sans-serif; font-size:14px; outline:none; transition:border-color 0.2s; }
+  .search-box:focus{border-color:var(--accent)} .search-box::placeholder{color:var(--muted)}
+  .filter-btn { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 16px; color:var(--muted); font-family:'Sarabun',sans-serif; font-size:13px; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+  .filter-btn:hover,.filter-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(108,99,255,0.08); }
+  .btn-primary { background:var(--accent); border:none; border-radius:8px; padding:10px 18px; color:white; font-family:'Sarabun',sans-serif; font-size:14px; font-weight:600; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+  .btn-primary:hover { background:#7d75ff; transform:translateY(-1px); }
+
+  .table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; margin-bottom:24px; }
+  table { width:100%; border-collapse:collapse; }
+  thead { background:var(--surface2); border-bottom:1px solid var(--border); }
+  th { padding:12px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.8px; white-space:nowrap; }
+  td { padding:14px 16px; font-size:14px; border-bottom:1px solid rgba(42,42,61,0.6); vertical-align:middle; }
+  tr:last-child td{border-bottom:none} tr:hover td{background:rgba(108,99,255,0.04)}
+
+  .app-badge { display:inline-flex; align-items:center; gap:7px; background:var(--surface2); border-radius:20px; padding:4px 10px 4px 6px; font-size:13px; font-weight:500; border:1px solid var(--border); }
+  .app-icon { width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:12px; flex-shrink:0; }
+  .status { display:inline-flex; align-items:center; gap:5px; border-radius:20px; padding:3px 10px; font-size:12px; font-weight:600; }
+  .status::before { content:''; width:6px; height:6px; border-radius:50%; }
+  .status.active{background:rgba(67,233,123,0.12);color:var(--accent3)} .status.active::before{background:var(--accent3);box-shadow:0 0 6px var(--accent3)}
+  .status.warning{background:rgba(255,209,102,0.12);color:var(--warn)} .status.warning::before{background:var(--warn)}
+  .status.expired{background:rgba(255,71,87,0.12);color:var(--danger)} .status.expired::before{background:var(--danger)}
+  .expiry{font-family:'IBM Plex Mono',monospace;font-size:13px} .expiry.soon{color:var(--warn)} .expiry.exp{color:var(--danger)}
+  .email-mono{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pass-wrap{display:flex;align-items:center;gap:6px}
+  .pass-mono{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);letter-spacing:2px}
+  .pass-eye{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px} .pass-eye:hover{color:var(--text)}
+  .customer-name{font-weight:600;font-size:14px} .customer-note{font-size:11px;color:var(--muted);margin-top:1px}
+  .actions{display:flex;gap:5px;flex-wrap:wrap}
+  .action-btn{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--muted);font-size:12px;cursor:pointer;transition:all 0.15s;font-family:'Sarabun',sans-serif;white-space:nowrap}
+  .action-btn:hover{color:var(--text);border-color:var(--accent)}
+  .action-btn.copy:hover{color:var(--accent3);border-color:var(--accent3)}
+  .action-btn.dup:hover{color:var(--warn);border-color:var(--warn)}
+  .action-btn.del:hover{color:var(--danger);border-color:var(--danger)}
+  .days-pill{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:2px 7px;border-radius:4px;margin-left:6px}
+  .days-pill.ok{background:rgba(67,233,123,0.1);color:var(--accent3)} .days-pill.soon{background:rgba(255,209,102,0.1);color:var(--warn)} .days-pill.gone{background:rgba(255,71,87,0.1);color:var(--danger)}
+  .empty-row td{text-align:center;padding:48px;color:var(--muted);font-size:14px}
+
+  /* Screen cards */
+  .view-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:16px; margin-bottom:24px; }
+  .id-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; transition:transform 0.2s,border-color 0.2s; }
+  .id-card:hover { transform:translateY(-2px); border-color:var(--accent); }
+  .id-card-header { padding:14px 16px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); }
+  .id-card-title { display:flex; align-items:center; gap:8px; }
+  .id-card-app { font-weight:700; font-size:15px; }
+  .id-card-email { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted); padding:6px 16px; background:var(--surface2); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .id-card-slots { padding:14px 16px; }
+  .slots-title { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px; }
+  .slot-list { display:flex; flex-direction:column; gap:6px; }
+  .slot-item { display:flex; align-items:center; justify-content:space-between; background:var(--surface2); border-radius:8px; padding:8px 12px; border:1px solid var(--border); }
+  .slot-item.empty-slot { border-style:dashed; opacity:0.5; }
+  .slot-name{font-size:13px;font-weight:600} .slot-empty-label{font-size:12px;color:var(--muted)} .slot-num{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)}
+  .slot-actions{display:flex;gap:4px}
+  .slot-btn{background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;font-size:11px;color:var(--muted);cursor:pointer;font-family:'Sarabun',sans-serif;transition:all 0.15s}
+  .slot-btn:hover{color:var(--text);border-color:var(--accent)} .slot-btn.rem:hover{color:var(--danger);border-color:var(--danger)}
+  .id-card-footer { padding:10px 16px; border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .slots-bar{display:flex;gap:3px}
+  .slots-bar-dot{width:18px;height:6px;border-radius:3px;background:var(--surface2);border:1px solid var(--border);transition:all 0.2s}
+  .slots-bar-dot.used{background:var(--accent);border-color:var(--accent)}
+  .slots-bar-dot.warn-dot{background:var(--warn);border-color:var(--warn)}
+  .slots-bar-dot.full-dot{background:var(--danger);border-color:var(--danger)}
+  .slots-summary{font-size:12px;color:var(--muted)} .slots-summary span{color:var(--text);font-weight:600}
+
+  /* Modal */
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);z-index:100;display:none;align-items:center;justify-content:center;padding:16px}
+  .modal-backdrop.open{display:flex}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;width:100%;max-width:500px;animation:modalIn 0.25s ease;max-height:90vh;overflow-y:auto}
+  @keyframes modalIn{from{opacity:0;transform:scale(0.95) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+  .modal h2{font-size:18px;font-weight:700;margin-bottom:20px}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .form-group{margin-bottom:14px}
+  .form-group label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px}
+  .form-group input,.form-group select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-family:'Sarabun',sans-serif;font-size:14px;outline:none;transition:border-color 0.2s}
+  .form-group input:focus,.form-group select:focus{border-color:var(--accent)}
+  .form-group select option{background:var(--surface2)}
+  .pass-input-wrap{position:relative}
+  .pass-input-wrap input{padding-right:40px;font-family:'IBM Plex Mono',monospace}
+  .pass-toggle{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px}
+  .modal-actions{display:flex;gap:10px;margin-top:20px}
+  .btn-secondary{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:11px;color:var(--muted);font-family:'Sarabun',sans-serif;font-size:14px;cursor:pointer;transition:all 0.2s}
+  .btn-secondary:hover{color:var(--text)} .btn-primary.full{flex:2}
+
+  /* Dup highlight */
+  .dup-flash { animation: dupFlash 1s ease; }
+  @keyframes dupFlash { 0%{background:rgba(255,209,102,0.2)} 100%{background:transparent} }
+
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--accent3);border-radius:10px;padding:12px 18px;font-size:14px;color:var(--accent3);z-index:999;transform:translateY(100px);opacity:0;transition:all 0.3s;max-width:320px}
+  .toast.show{transform:translateY(0);opacity:1}
+
+  /* App filter pills */
+  .app-filter-bar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
+  .app-pill { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; color:var(--muted); font-family:'Sarabun',sans-serif; }
+  .app-pill:hover { border-color:var(--accent); color:var(--text); }
+  .app-pill.active { color:white; border-color:transparent; }
+  .app-pill .pill-count { font-size:10px; background:rgba(255,255,255,0.2); border-radius:10px; padding:1px 6px; }
+  .app-pill-label { font-size:11px; color:var(--muted); padding:4px 0; white-space:nowrap; align-self:center; }
+
+  @media(max-width:700px){
+    .stats-bar{grid-template-columns:repeat(2,1fr)}
+    .form-row{grid-template-columns:1fr}
+    th:nth-child(4),td:nth-child(4){display:none}
+  }
+</style>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🎬</div>
+      <h1>Stream<span>Vault</span></h1>
+    </div>
+    <div class="header-right">
+      <span style="font-size:12px;color:var(--muted)" id="clock"></span>
+      <span style="font-size:12px;" id="sync-status">⚡ กำลังเชื่อมต่อ...</span>
+      <button class="bell-btn" id="bell-btn" onclick="toggleNotifPanel()">🔔 แจ้งเตือน <span class="bell-dot"></span></button>
+    </div>
+  </header>
+
+  <!-- Notif Panel -->
+  <div class="notif-panel" id="notif-panel">
+    <div class="notif-top">
+      <h3>🔔 ตั้งค่าการแจ้งเตือน</h3>
+      <span class="notif-badge off" id="notif-badge">ปิดอยู่</span>
+    </div>
+    <div class="notif-row">
+      <label>แจ้งเตือนล่วงหน้า</label>
+      <select class="notif-select" id="notif-days"><option value="3">3 วัน</option><option value="5">5 วัน</option><option value="7" selected>7 วัน</option><option value="14">14 วัน</option><option value="30">30 วัน</option></select>
+      <label>เช็คทุก</label>
+      <select class="notif-select" id="notif-interval"><option value="1">1 ชั่วโมง</option><option value="3" selected>3 ชั่วโมง</option><option value="6">6 ชั่วโมง</option><option value="12">12 ชั่วโมง</option></select>
+      <button class="btn-primary" id="notif-toggle-btn" onclick="enableNotifications()">เปิดแจ้งเตือน</button>
+      <button class="btn-primary" onclick="testNotification()" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted)">ทดสอบ 🔔</button>
+    </div>
+    <div class="notif-hint">💡 ต้องเปิดไฟล์นี้ทิ้งไว้ในเบราว์เซอร์ถึงจะรับแจ้งเตือนได้</div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-bar">
+    <div class="stat-card blue"><div class="stat-label">บัญชีทั้งหมด</div><div class="stat-value" id="stat-total">0</div></div>
+    <div class="stat-card green"><div class="stat-label">ใช้งานอยู่</div><div class="stat-value" id="stat-active">0</div></div>
+    <div class="stat-card yellow"><div class="stat-label">ใกล้หมดอายุ</div><div class="stat-value" id="stat-warn">0</div></div>
+    <div class="stat-card pink"><div class="stat-label">หมดอายุแล้ว</div><div class="stat-value" id="stat-exp">0</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('accounts',this)">📋 บัญชีลูกค้า</button>
+    <button class="tab-btn" onclick="switchTab('screens',this)">🖥️ จัดการจอ (ID)</button>
+  </div>
+
+  <!-- Tab: Accounts -->
+  <div id="tab-accounts">
+    <div class="toolbar">
+      <input class="search-box" type="text" placeholder="🔍  ค้นหาชื่อลูกค้า, อีเมล, แอป..." id="search-input" oninput="renderTable()">
+      <button class="filter-btn active" onclick="setFilter('all',this)">ทั้งหมด</button>
+      <button class="filter-btn" onclick="setFilter('active',this)">✅ ปกติ</button>
+      <button class="filter-btn" onclick="setFilter('warning',this)">⚠️ ใกล้หมด</button>
+      <button class="filter-btn" onclick="setFilter('expired',this)">❌ หมดแล้ว</button>
+      <button class="btn-primary" onclick="openModal()">+ เพิ่มบัญชี</button>
+    </div>
+    <div class="app-filter-bar" id="app-filter-bar">
+      <!-- Populated by JS -->
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ลูกค้า</th><th>แอป</th><th>อีเมล & รหัสผ่าน</th><th>วันหมดอายุ</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Tab: Screens -->
+  <div id="tab-screens" style="display:none">
+    <div class="toolbar">
+      <input class="search-box" type="text" placeholder="🔍  ค้นหาแอป, อีเมล..." id="screen-search" oninput="renderScreens()">
+      <button class="btn-primary" onclick="openIdModal()">+ เพิ่ม ID ใหม่</button>
+    </div>
+    <div class="view-cards" id="screen-cards"></div>
+  </div>
+</div>
+
+<!-- Modal: Account -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <h2 id="modal-title">➕ เพิ่มบัญชีใหม่</h2>
+    <div class="form-group"><label>ชื่อลูกค้า</label><input type="text" id="f-name" placeholder="เช่น คุณสมใจ"></div>
+    <div class="form-row">
+      <div class="form-group"><label>แอปดูหนัง</label>
+        <select id="f-app">
+          <option value="">-- เลือกแอป --</option>
+          <optgroup label="🎬 สตรีมมิ่งทั่วไป">
+            <option value="Netflix">🎬 Netflix</option>
+            <option value="Disney+">🏰 Disney+</option>
+            <option value="HBO Max">👑 HBO Max</option>
+            <option value="Prime Video">📦 Prime Video</option>
+            <option value="Apple TV+">🍎 Apple TV+</option>
+          </optgroup>
+          <optgroup label="🎵 เพลง / วิดีโอ">
+            <option value="YouTube Premium">▶️ YouTube Premium</option>
+            <option value="Spotify">🎵 Spotify</option>
+          </optgroup>
+          <optgroup label="📺 เอเชีย / ซีรีส์">
+            <option value="WeTV">📺 WeTV</option>
+            <option value="iQIYI">🎭 iQIYI</option>
+            <option value="iDrama">🎎 iDrama</option>
+          </optgroup>
+          <optgroup label="⚡ Short Drama">
+            <option value="DramaBox">📦 DramaBox</option>
+            <option value="DramaWave">🌊 DramaWave</option>
+            <option value="ReelShort">🎞️ ReelShort</option>
+            <option value="FlickReels">✨ FlickReels</option>
+            <option value="NetShort">⚡ NetShort</option>
+            <option value="GoodShort">🌟 GoodShort</option>
+            <option value="ShortMax">🔥 ShortMax</option>
+          </optgroup>
+          <optgroup label="📱 อื่นๆ">
+            <option value="other">📱 อื่นๆ</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="form-group"><label>วันหมดอายุ</label><input type="date" id="f-date"></div>
+    </div>
+    <div class="form-group"><label>Gmail ที่ใช้</label><input type="email" id="f-email" placeholder="example@gmail.com"></div>
+    <div class="form-group"><label>รหัสผ่าน</label>
+      <div class="pass-input-wrap">
+        <input type="password" id="f-pass" placeholder="ใส่รหัสผ่าน">
+        <button class="pass-toggle" type="button" onclick="togglePassInput('f-pass',this)">👁️</button>
+      </div>
+    </div>
+    <div class="form-group"><label>หมายเหตุ</label><input type="text" id="f-note" placeholder="เช่น แพ็กเกจครอบครัว, 4 จอ"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">ยกเลิก</button>
+      <button class="btn-primary full" onclick="saveEntry()">💾 บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: ID -->
+<div class="modal-backdrop" id="id-modal">
+  <div class="modal">
+    <h2 id="id-modal-title">➕ เพิ่ม ID ใหม่</h2>
+    <div class="form-group"><label>แอปดูหนัง</label>
+      <select id="id-app">
+        <option value="">-- เลือกแอป --</option>
+        <optgroup label="🎬 สตรีมมิ่งทั่วไป">
+            <option value="Netflix">🎬 Netflix</option>
+            <option value="Disney+">🏰 Disney+</option>
+            <option value="HBO Max">👑 HBO Max</option>
+            <option value="Prime Video">📦 Prime Video</option>
+            <option value="Apple TV+">🍎 Apple TV+</option>
+          </optgroup>
+          <optgroup label="🎵 เพลง / วิดีโอ">
+            <option value="YouTube Premium">▶️ YouTube Premium</option>
+            <option value="Spotify">🎵 Spotify</option>
+          </optgroup>
+          <optgroup label="📺 เอเชีย / ซีรีส์">
+            <option value="WeTV">📺 WeTV</option>
+            <option value="iQIYI">🎭 iQIYI</option>
+            <option value="iDrama">🎎 iDrama</option>
+          </optgroup>
+          <optgroup label="⚡ Short Drama">
+            <option value="DramaBox">📦 DramaBox</option>
+            <option value="DramaWave">🌊 DramaWave</option>
+            <option value="ReelShort">🎞️ ReelShort</option>
+            <option value="FlickReels">✨ FlickReels</option>
+            <option value="NetShort">⚡ NetShort</option>
+            <option value="GoodShort">🌟 GoodShort</option>
+            <option value="ShortMax">🔥 ShortMax</option>
+          </optgroup>
+          <optgroup label="📱 อื่นๆ">
+            <option value="other">📱 อื่นๆ</option>
+          </optgroup>
+      </select>
+    </div>
+    <div class="form-group"><label>Gmail ที่ใช้</label><input type="email" id="id-email" placeholder="example@gmail.com"></div>
+    <div class="form-group"><label>รหัสผ่าน</label>
+      <div class="pass-input-wrap">
+        <input type="password" id="id-pass" placeholder="ใส่รหัสผ่าน">
+        <button class="pass-toggle" type="button" onclick="togglePassInput('id-pass',this)">👁️</button>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>จำนวนจอทั้งหมด</label><input type="number" id="id-slots" min="1" max="10" value="5"></div>
+      <div class="form-group"><label>วันหมดอายุ</label><input type="date" id="id-date"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeIdModal()">ยกเลิก</button>
+      <button class="btn-primary full" onclick="saveId()">💾 บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Slot -->
+<div class="modal-backdrop" id="slot-modal">
+  <div class="modal" style="max-width:400px">
+    <h2>👤 เพิ่มลูกค้าในจอ</h2>
+    <div class="form-group"><label>ชื่อลูกค้า</label><input type="text" id="sl-name" placeholder="เช่น คุณสมใจ"></div>
+    <div class="form-group"><label>หมายเหตุ</label><input type="text" id="sl-note" placeholder="เช่น จอที่ 2, ชำระแล้ว"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeSlotModal()">ยกเลิก</button>
+      <button class="btn-primary full" onclick="saveSlot()">💾 บันทึก</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== Firebase Setup =====
+// Firebase compat SDK (loaded via CDN)
+const firebaseConfig = {
+  apiKey: "AIzaSyDCRplXOvFrtYch01axweUa1D45PazfBso",
+  authDomain: "streamvault-52cc3.firebaseapp.com",
+  projectId: "streamvault-52cc3",
+  storageBucket: "streamvault-52cc3.firebasestorage.app",
+  messagingSenderId: "689093734159",
+  appId: "1:689093734159:web:13784e704755091a08587a"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ===== Data =====
+let entries = [];
+let ids     = [];
+let editId_entry = null, editId_id = null, filterMode = 'all', appFilter = 'all';
+let slotTarget = null;
+let _unsubEntries = null, _unsubIds = null;
+
+// ===== Firebase Sync =====
+function startSync() {
+  // Sync entries
+  _unsubEntries = db.collection('entries').onSnapshot(snap => {
+    entries = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+    renderTable();
+    renderAppPills();
+    updateStats();
+  });
+  // Sync ids
+  _unsubIds = db.collection('ids').onSnapshot(snap => {
+    ids = snap.docs.map(d => ({ ...d.data(), _fid: d.id }));
+    renderScreens();
+  });
+}
+
+async function saveEntries_remote(entry) {
+  await db.collection('entries').doc(String(entry.id)).set(entry);
+}
+async function deleteEntry_remote(id) {
+  await db.collection('entries').doc(String(id)).delete();
+}
+async function saveId_remote(item) {
+  const fid = item._fid || String(item.id);
+  await db.collection('ids').doc(fid).set({ ...item, _fid: fid });
+}
+async function deleteId_remote(fid) {
+  await db.collection('ids').doc(fid).delete();
+}
+
+// Show sync status
+function showSyncStatus(ok) {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  el.textContent = ok ? '☁️ ซิงค์แล้ว' : '⚡ กำลังซิงค์...';
+  el.style.color = ok ? 'var(--accent3)' : 'var(--warn)';
+}
+
+const APP_COLORS = {'Netflix':'#e50914','Disney+':'#0063e5','HBO Max':'#5a2d82','Prime Video':'#00a8e1','Apple TV+':'#555','YouTube Premium':'#ff0000','Spotify':'#1db954','WeTV':'#ff6b35','iQIYI':'#00c853','DramaBox':'#c0392b','DramaWave':'#1a6bb5','ReelShort':'#e67e22','FlickReels':'#8e44ad','NetShort':'#16a085','iDrama':'#d35400','GoodShort':'#27ae60','ShortMax':'#2c3e50','other':'#888'};
+const APP_EMOJI  = {'Netflix':'🎬','Disney+':'🏰','HBO Max':'👑','Prime Video':'📦','Apple TV+':'🍎','YouTube Premium':'▶️','Spotify':'🎵','WeTV':'📺','iQIYI':'🎭','DramaBox':'📦','DramaWave':'🌊','ReelShort':'🎞️','FlickReels':'✨','NetShort':'⚡','iDrama':'🎎','GoodShort':'🌟','ShortMax':'🔥','other':'📱'};
+const APP_CAT = {
+  'Netflix':'สตรีมมิ่งทั่วไป','Disney+':'สตรีมมิ่งทั่วไป','HBO Max':'สตรีมมิ่งทั่วไป',
+  'Prime Video':'สตรีมมิ่งทั่วไป','Apple TV+':'สตรีมมิ่งทั่วไป',
+  'YouTube Premium':'เพลง / วิดีโอ','Spotify':'เพลง / วิดีโอ',
+  'WeTV':'เอเชีย / ซีรีส์','iQIYI':'เอเชีย / ซีรีส์','iDrama':'เอเชีย / ซีรีส์',
+  'DramaBox':'Short Drama','DramaWave':'Short Drama','ReelShort':'Short Drama',
+  'FlickReels':'Short Drama','NetShort':'Short Drama','GoodShort':'Short Drama','ShortMax':'Short Drama',
+  'other':'อื่นๆ'
+};
+const CAT_ORDER = ['สตรีมมิ่งทั่วไป','เพลง / วิดีโอ','เอเชีย / ซีรีส์','Short Drama','อื่นๆ'];
+const CAT_ICON  = {'สตรีมมิ่งทั่วไป':'🎬','เพลง / วิดีโอ':'🎵','เอเชีย / ซีรีส์':'📺','Short Drama':'⚡','อื่นๆ':'📱'};
+
+// Data comes from Firebase - no sample data needed
+
+function saveEntries(){ localStorage.setItem('sv-entries',JSON.stringify(entries)); }
+function saveIds()    { localStorage.setItem('sv-ids',    JSON.stringify(ids));     }
+function getDaysLeft(expiry){ const t=new Date(); t.setHours(0,0,0,0); const e=new Date(expiry); e.setHours(0,0,0,0); return Math.round((e-t)/86400000); }
+function getStatus(days){ return days<0?'expired':days<=7?'warning':'active'; }
+
+function renderAppPills(){
+  const bar = document.getElementById('app-filter-bar');
+  // Count per app from ALL entries (ignore status filter, just count)
+  const counts = {};
+  entries.forEach(e=>{ counts[e.app]=(counts[e.app]||0)+1; });
+  const appsUsed = Object.keys(counts).sort((a,b)=>(APP_CAT[a]||'').localeCompare(APP_CAT[b]||'')||a.localeCompare(b));
+
+  let html = `<span class="app-pill-label">กรองแอป:</span>`;
+  // All pill
+  html += `<button class="app-pill ${appFilter==='all'?'active':''}" style="${appFilter==='all'?'background:var(--accent)':''}" onclick="setAppFilter('all')">ทั้งหมด <span class="pill-count">${entries.length}</span></button>`;
+
+  // Group by category
+  let lastCat = '';
+  appsUsed.forEach(app=>{
+    const cat = APP_CAT[app]||'อื่นๆ';
+    const color = APP_COLORS[app]||'#888';
+    const emoji = APP_EMOJI[app]||'📱';
+    const isActive = appFilter===app;
+    html += `<button class="app-pill ${isActive?'active':''}" style="${isActive?`background:${color};`:`border-color:${color}33;color:${color};`}" onclick="setAppFilter('${app}')">
+      ${emoji} ${app} <span class="pill-count" style="${isActive?'':'background:'+color+'22;color:'+color}">${counts[app]}</span>
+    </button>`;
+  });
+  bar.innerHTML = html;
+}
+
+function setAppFilter(app){
+  appFilter = app;
+  renderAppPills();
+  renderTable();
+}
+
+function updateStats(){
+  let active=0,warn=0,exp=0;
+  entries.forEach(e=>{ const s=getStatus(getDaysLeft(e.expiry)); if(s==='active')active++; else if(s==='warning')warn++; else exp++; });
+  document.getElementById('stat-total').textContent=entries.length;
+  document.getElementById('stat-active').textContent=active;
+  document.getElementById('stat-warn').textContent=warn;
+  document.getElementById('stat-exp').textContent=exp;
+}
+
+function switchTab(tab,btn){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-accounts').style.display=tab==='accounts'?'block':'none';
+  document.getElementById('tab-screens').style.display=tab==='screens'?'block':'none';
+  if(tab==='screens') renderScreens();
+}
+
+function setFilter(mode,btn){
+  filterMode=mode;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); renderTable();
+}
+
+// ===== Accounts =====
+function renderTable(){
+  const q=document.getElementById('search-input').value.toLowerCase();
+  let filtered=entries.filter(e=>{
+    if(filterMode!=='all'&&getStatus(getDaysLeft(e.expiry))!==filterMode) return false;
+    if(appFilter!=='all'&&e.app!==appFilter) return false;
+    if(q&&!e.name.toLowerCase().includes(q)&&!e.email.toLowerCase().includes(q)&&!e.app.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  filtered.sort((a,b)=>getDaysLeft(a.expiry)-getDaysLeft(b.expiry));
+  const tbody=document.getElementById('table-body');
+  if(filtered.length===0){tbody.innerHTML=`<tr class="empty-row"><td colspan="6">ไม่พบรายการ</td></tr>`;updateStats();return;}
+
+  // Group by category
+  const groups = {};
+  CAT_ORDER.forEach(c=>groups[c]=[]);
+  filtered.forEach(e=>{ const cat=APP_CAT[e.app]||'อื่นๆ'; if(!groups[cat])groups[cat]=[]; groups[cat].push(e); });
+
+  let html='';
+  CAT_ORDER.forEach(cat=>{
+    const list=groups[cat];
+    if(!list||list.length===0) return;
+    html+=`<tr><td colspan="6" style="padding:10px 16px 6px;background:var(--surface2);border-bottom:1px solid var(--border)">
+      <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px">${CAT_ICON[cat]} ${cat}</span>
+      <span style="font-size:11px;color:var(--muted);margin-left:6px">(${list.length} รายการ)</span>
+    </td></tr>`;
+    html+=list.map(e=>{
+      const days=getDaysLeft(e.expiry),status=getStatus(days);
+      const statusLabel={active:'ปกติ',warning:'ใกล้หมด',expired:'หมดแล้ว'}[status];
+      const color=APP_COLORS[e.app]||'#888',emoji=APP_EMOJI[e.app]||'📱';
+      const pillCls=days<0?'gone':days<=7?'soon':'ok';
+      const pillTxt=days<0?`${Math.abs(days)}วันที่แล้ว`:days===0?'วันนี้!':`${days}วัน`;
+      const expFmt=new Date(e.expiry).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});
+      const expCls=status==='warning'?'soon':status==='expired'?'exp':'';
+      return `<tr id="row-${e.id}">
+        <td><div class="customer-name">${e.name}</div>${e.note?`<div class="customer-note">💬 ${e.note}</div>`:''}</td>
+        <td><div class="app-badge"><div class="app-icon" style="background:${color}22;color:${color}">${emoji}</div>${e.app}</div></td>
+        <td>
+          <div class="email-mono" title="${e.email}">${e.email}</div>
+          <div class="pass-wrap" style="margin-top:4px">
+            <span class="pass-mono" id="pass-${e.id}">••••••••</span>
+            ${e.pass?`<button class="pass-eye" onclick="togglePass(${e.id})" title="แสดง/ซ่อน">👁️</button>
+            <button class="action-btn copy" onclick="copyPass(${e.id})" style="padding:2px 7px;font-size:11px">📋</button>`:''}
+          </div>
+        </td>
+        <td><span class="expiry ${expCls}">${expFmt}</span><span class="days-pill ${pillCls}">${pillTxt}</span></td>
+        <td><span class="status ${status}">${statusLabel}</span></td>
+        <td><div class="actions">
+          <button class="action-btn copy" onclick="copyEmail(${e.id})" title="คัดลอกอีเมล">📋</button>
+          <button class="action-btn dup" onclick="duplicateEntry(${e.id})" title="ทำสำเนา">⧉ สำเนา</button>
+          <button class="action-btn" onclick="openModal(${e.id})" title="แก้ไข">✏️</button>
+          <button class="action-btn del" onclick="deleteEntry(${e.id})" title="ลบ">🗑️</button>
+        </div></td>
+      </tr>`;
+    }).join('');
+  });
+  tbody.innerHTML=html;
+  updateStats();
+}
+
+// ===== Duplicate Entry =====
+function duplicateEntry(id){
+  const orig = entries.find(e=>e.id===id);
+  const copy = { ...orig, id:String(Date.now()), name: orig.name + ' (สำเนา)', note: orig.note };
+  showSyncStatus(false); saveEntries_remote(copy).then(()=>showSyncStatus(true));
+  // renderTable will be triggered by onSnapshot
+  // flash highlight
+  setTimeout(()=>{
+    const row=document.getElementById(`row-${copy.id}`);
+    if(row){ row.classList.add('dup-flash'); setTimeout(()=>row.classList.remove('dup-flash'),1000); }
+  },50);
+  showToast(`⧉ ทำสำเนา "${orig.name}" แล้ว — แก้ไขชื่อตามต้องการได้เลย`,'#ffd166');
+}
+
+let passVisible={};
+function togglePass(id){
+  const el=document.getElementById(`pass-${id}`),e=entries.find(x=>x.id===id);
+  passVisible[id]=!passVisible[id];
+  el.textContent=passVisible[id]?(e.pass||'—'):'••••••••';
+}
+function copyPass(id){ const e=entries.find(x=>x.id===id); navigator.clipboard.writeText(e.pass||'').then(()=>showToast('📋 คัดลอกรหัสผ่านแล้ว','#43e97b')); }
+function copyEmail(id){ const e=entries.find(x=>x.id===id); navigator.clipboard.writeText(e.email).then(()=>showToast('📋 คัดลอกอีเมลแล้ว','#43e97b')); }
+function togglePassInput(inputId,btn){ const inp=document.getElementById(inputId); inp.type=inp.type==='password'?'text':'password'; btn.textContent=inp.type==='password'?'👁️':'🙈'; }
+
+function openModal(id=null){
+  editId_entry=id;
+  document.getElementById('modal-title').textContent=id?'✏️ แก้ไขบัญชี':'➕ เพิ่มบัญชีใหม่';
+  if(id){
+    const e=entries.find(x=>x.id===id);
+    document.getElementById('f-name').value=e.name;
+    document.getElementById('f-app').value=e.app;
+    document.getElementById('f-email').value=e.email;
+    document.getElementById('f-pass').value=e.pass||'';
+    document.getElementById('f-date').value=e.expiry;
+    document.getElementById('f-note').value=e.note||'';
+  } else {
+    ['f-name','f-app','f-email','f-pass','f-date','f-note'].forEach(i=>document.getElementById(i).value='');
+  }
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal(){ document.getElementById('modal').classList.remove('open'); editId_entry=null; }
+function saveEntry(){
+  const name=document.getElementById('f-name').value.trim(),app=document.getElementById('f-app').value,
+        email=document.getElementById('f-email').value.trim(),pass=document.getElementById('f-pass').value,
+        expiry=document.getElementById('f-date').value,note=document.getElementById('f-note').value.trim();
+  if(!name||!app||!email||!expiry){showToast('⚠️ กรุณากรอกข้อมูลให้ครบ','#ffd166');return;}
+  if(editId_entry){
+    const idx=entries.findIndex(e=>e.id===editId_entry);
+    entries[idx]={...entries[idx],name,app,email,pass,expiry,note};
+    showToast('✅ แก้ไขเรียบร้อย');
+  } else {
+    entries.push({id:Date.now(),name,app,email,pass,expiry,note});
+    showToast('✅ เพิ่มบัญชีเรียบร้อย');
+  }
+  showSyncStatus(false); saveEntries_remote(editId_entry ? entries.find(e=>e.id===editId_entry) : entries[entries.length-1]).then(()=>showSyncStatus(true)); closeModal();
+}
+function deleteEntry(id){ if(!confirm('ลบรายการนี้?'))return; showSyncStatus(false); deleteEntry_remote(id).then(()=>{ showSyncStatus(true); showToast('🗑️ ลบแล้ว','#ff4757'); }); }
+
+// ===== Screens =====
+function renderScreens(){
+  const q=document.getElementById('screen-search').value.toLowerCase();
+  const container=document.getElementById('screen-cards');
+  let filtered=ids.filter(item=> !q||(item.app.toLowerCase().includes(q)||item.email.toLowerCase().includes(q)));
+  if(filtered.length===0){ container.innerHTML=`<div style="text-align:center;padding:48px;color:var(--muted);grid-column:1/-1">ยังไม่มี ID — กด "+ เพิ่ม ID ใหม่" ได้เลย</div>`; return; }
+
+  const screenGroups={};
+  CAT_ORDER.forEach(c=>screenGroups[c]=[]);
+  filtered.forEach(item=>{ const cat=APP_CAT[item.app]||'อื่นๆ'; if(!screenGroups[cat])screenGroups[cat]=[]; screenGroups[cat].push(item); });
+
+  let allCards='';
+  CAT_ORDER.forEach(cat=>{
+    const list=screenGroups[cat];
+    if(!list||list.length===0) return;
+    allCards+=`<div style="grid-column:1/-1;padding:10px 0 6px"><div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid var(--border);padding-bottom:8px">${CAT_ICON[cat]} ${cat} <span style="font-weight:400;text-transform:none">(${list.length} ID)</span></div></div>`;
+    list.forEach(item=>{
+      const realIdx=ids.indexOf(item);
+      const color=APP_COLORS[item.app]||'#888',emoji=APP_EMOJI[item.app]||'📱';
+      const usedCount=item.slots.filter(s=>s!==null).length;
+      const isFull=usedCount>=item.totalSlots;
+      const days=getDaysLeft(item.expiry);
+      const expFmt=new Date(item.expiry).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'});
+      const expCls=days<0?'exp':days<=7?'soon':'';
+      const pillCls=days<0?'gone':days<=7?'soon':'ok';
+      const pillTxt=days<0?`${Math.abs(days)}วันที่แล้ว`:days===0?'วันนี้!':`${days}วัน`;
+      const slotItems=Array.from({length:item.totalSlots},(_,si)=>{
+        const name=item.slots[si];
+        return name
+          ? `<div class="slot-item"><div style="display:flex;align-items:center;gap:8px"><span class="slot-num">จอ ${si+1}</span><span class="slot-name">${name}</span></div><div class="slot-actions"><button class="slot-btn rem" onclick="removeSlot(${realIdx},${si})">ลบออก</button></div></div>`
+          : `<div class="slot-item empty-slot"><div style="display:flex;align-items:center;gap:8px"><span class="slot-num">จอ ${si+1}</span><span class="slot-empty-label">ว่างอยู่</span></div><div class="slot-actions"><button class="slot-btn" onclick="openSlotModal(${realIdx},${si})">+ เพิ่ม</button></div></div>`;
+      }).join('');
+      const barDots=Array.from({length:item.totalSlots},(_,si)=>{
+        const used=item.slots[si]!==null;
+        const cls=used?(isFull?'full-dot':usedCount===item.totalSlots-1?'warn-dot':'used'):'';
+        return `<div class="slots-bar-dot ${cls}"></div>`;
+      }).join('');
+      allCards+=`<div class="id-card" id="idcard-${realIdx}">
+        <div class="id-card-header">
+          <div class="id-card-title">
+            <div class="app-icon" style="background:${color}22;color:${color};width:28px;height:28px;border-radius:7px;font-size:14px;display:flex;align-items:center;justify-content:center">${emoji}</div>
+            <span class="id-card-app">${item.app}</span>
+            ${isFull?'<span style="font-size:11px;background:rgba(255,71,87,0.15);color:var(--danger);padding:2px 8px;border-radius:10px;font-weight:700">เต็มแล้ว</span>':''}
+          </div>
+          <div style="display:flex;gap:5px">
+            <button class="action-btn dup" onclick="duplicateId(${realIdx})" title="ทำสำเนา">⧉ สำเนา</button>
+            <button class="action-btn" onclick="openIdModal(${realIdx})">✏️</button>
+            <button class="action-btn del" onclick="deleteId(${realIdx})">🗑️</button>
+          </div>
+        </div>
+        <div class="id-card-email">
+          <span>${item.email}</span>
+          <div style="display:flex;gap:4px">
+            <button class="pass-eye" onclick="toggleIdPass(${realIdx})">👁️</button>
+            <button class="action-btn copy" onclick="copyIdEmail(${realIdx})" style="padding:2px 8px;font-size:11px">📋 อีเมล</button>
+          </div>
+        </div>
+        <div id="id-pass-row-${realIdx}" style="display:none;padding:6px 16px;background:var(--surface2);border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--warn)">
+          🔑 ${item.pass||'(ไม่มีรหัส)'}
+          ${item.pass?`<button class="action-btn copy" onclick="copyIdPass(${realIdx})" style="padding:2px 8px;font-size:11px;margin-left:8px">📋 รหัส</button>`:''}
+        </div>
+        <div style="padding:8px 16px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border)">
+          📅 <span class="expiry ${expCls}">${expFmt}</span><span class="days-pill ${pillCls}">${pillTxt}</span>
+        </div>
+        <div class="id-card-slots">
+          <div class="slots-title">จอทั้งหมด ${usedCount}/${item.totalSlots} จอ</div>
+          <div class="slot-list">${slotItems}</div>
+        </div>
+        <div class="id-card-footer">
+          <div class="slots-bar">${barDots}</div>
+          <div class="slots-summary">เหลือว่าง <span>${item.totalSlots-usedCount}</span> จอ</div>
+        </div>
+      </div>`;
+    });
+  });
+  container.innerHTML=allCards;
+}
+
+// ===== Duplicate ID =====
+function duplicateId(idx){
+  const orig=ids[idx];
+  const fid=String(Date.now());
+  const copy={
+    ...orig,
+    id:fid,
+    _fid:fid,
+    email: orig.email.replace('@','_copy@'),
+    slots: Array(orig.totalSlots).fill(null)
+  };
+  showSyncStatus(false); saveId_remote(copy).then(()=>showSyncStatus(true));
+  // renderScreens will be triggered by onSnapshot
+  showToast(`⧉ ทำสำเนา ID ${orig.app} แล้ว — จอว่างทั้งหมด พร้อมใส่ลูกค้าใหม่`,'#ffd166');
+}
+
+let idPassVisible={};
+function toggleIdPass(idx){ idPassVisible[idx]=!idPassVisible[idx]; document.getElementById(`id-pass-row-${idx}`).style.display=idPassVisible[idx]?'block':'none'; }
+function copyIdEmail(idx){ navigator.clipboard.writeText(ids[idx].email).then(()=>showToast('📋 คัดลอกอีเมลแล้ว','#43e97b')); }
+function copyIdPass(idx){ navigator.clipboard.writeText(ids[idx].pass||'').then(()=>showToast('📋 คัดลอกรหัสผ่านแล้ว','#43e97b')); }
+
+function openIdModal(idx=null){
+  editId_id=idx;
+  document.getElementById('id-modal-title').textContent=idx!==null?'✏️ แก้ไข ID':'➕ เพิ่ม ID ใหม่';
+  if(idx!==null){
+    const item=ids[idx];
+    document.getElementById('id-app').value=item.app;
+    document.getElementById('id-email').value=item.email;
+    document.getElementById('id-pass').value=item.pass||'';
+    document.getElementById('id-slots').value=item.totalSlots;
+    document.getElementById('id-date').value=item.expiry;
+  } else {
+    ['id-app','id-email','id-pass','id-date'].forEach(i=>document.getElementById(i).value='');
+    document.getElementById('id-slots').value='5';
+  }
+  document.getElementById('id-modal').classList.add('open');
+}
+function closeIdModal(){ document.getElementById('id-modal').classList.remove('open'); editId_id=null; }
+function saveId(){
+  const app=document.getElementById('id-app').value,email=document.getElementById('id-email').value.trim(),
+        pass=document.getElementById('id-pass').value,totalSlots=parseInt(document.getElementById('id-slots').value)||5,
+        expiry=document.getElementById('id-date').value;
+  if(!app||!email||!expiry){showToast('⚠️ กรุณากรอกข้อมูลให้ครบ','#ffd166');return;}
+  if(editId_id!==null){
+    const old=ids[editId_id];
+    const newSlots=Array.from({length:totalSlots},(_,i)=>old.slots[i]!==undefined?old.slots[i]:null);
+    ids[editId_id]={...old,app,email,pass,totalSlots,expiry,slots:newSlots};
+    showToast('✅ แก้ไขเรียบร้อย');
+  } else {
+    ids.push({id:Date.now(),app,email,pass,expiry,totalSlots,slots:Array(totalSlots).fill(null)});
+    showToast('✅ เพิ่ม ID เรียบร้อย');
+  }
+  const _item = editId_id!==null ? ids[editId_id] : ids[ids.length-1]; showSyncStatus(false); saveId_remote(_item).then(()=>showSyncStatus(true)); closeIdModal();
+}
+function deleteId(idx){ if(!confirm('ลบ ID นี้?'))return; const fid=ids[idx]._fid||String(ids[idx].id); showSyncStatus(false); deleteId_remote(fid).then(()=>{ showSyncStatus(true); showToast('🗑️ ลบแล้ว','#ff4757'); }); }
+
+function openSlotModal(idIdx,slotIdx){ slotTarget={idIdx,slotIdx}; document.getElementById('sl-name').value=''; document.getElementById('sl-note').value=''; document.getElementById('slot-modal').classList.add('open'); }
+function closeSlotModal(){ document.getElementById('slot-modal').classList.remove('open'); slotTarget=null; }
+function saveSlot(){
+  const name=document.getElementById('sl-name').value.trim();
+  if(!name){showToast('⚠️ กรุณาใส่ชื่อลูกค้า','#ffd166');return;}
+  const note=document.getElementById('sl-note').value.trim();
+  ids[slotTarget.idIdx].slots[slotTarget.slotIdx]=name+(note?` (${note})`:'');
+  showSyncStatus(false); saveId_remote(ids[slotTarget.idIdx]).then(()=>showSyncStatus(true)); closeSlotModal(); showToast(`✅ เพิ่ม ${name} ในจอที่ ${slotTarget.slotIdx+1} แล้ว`,'#43e97b');
+}
+function removeSlot(idIdx,slotIdx){ const name=ids[idIdx].slots[slotIdx]; if(!confirm(`ลบ "${name}" ออก?`))return; ids[idIdx].slots[slotIdx]=null; showSyncStatus(false); saveId_remote(ids[idIdx]).then(()=>{ showSyncStatus(true); showToast('🗑️ ลบออกแล้ว','#ff4757'); }); }
+
+// ===== Notifications =====
+let notifTimer=null,notifEnabled=localStorage.getItem('sv-notif')==='true',notifDays=parseInt(localStorage.getItem('sv-notif-days')||'7'),notifHours=parseInt(localStorage.getItem('sv-notif-hours')||'3');
+function toggleNotifPanel(){ const p=document.getElementById('notif-panel'); p.classList.toggle('open'); if(p.classList.contains('open')){document.getElementById('notif-days').value=notifDays;document.getElementById('notif-interval').value=notifHours;} refreshNotifUI(); }
+function refreshNotifUI(){ const badge=document.getElementById('notif-badge'),btn=document.getElementById('notif-toggle-btn'),bell=document.getElementById('bell-btn'); if(Notification.permission==='denied'){badge.className='notif-badge denied';badge.textContent='ถูกบล็อก';btn.textContent='บล็อกอยู่';btn.style.background='#555';btn.onclick=null;bell.classList.remove('on');return;} if(notifEnabled&&Notification.permission==='granted'){badge.className='notif-badge on';badge.textContent='✅ เปิดอยู่';btn.textContent='ปิดแจ้งเตือน';btn.style.background='var(--danger)';btn.onclick=disableNotifications;bell.classList.add('on');}else{badge.className='notif-badge off';badge.textContent='ปิดอยู่';btn.textContent='เปิดแจ้งเตือน';btn.style.background='var(--accent)';btn.onclick=enableNotifications;bell.classList.remove('on');} }
+async function enableNotifications(){ const perm=await Notification.requestPermission(); if(perm!=='granted'){showToast('❌ กรุณาอนุญาตการแจ้งเตือนก่อน','#ff4757');refreshNotifUI();return;} notifEnabled=true;notifDays=parseInt(document.getElementById('notif-days').value);notifHours=parseInt(document.getElementById('notif-interval').value);localStorage.setItem('sv-notif','true');localStorage.setItem('sv-notif-days',notifDays);localStorage.setItem('sv-notif-hours',notifHours);startTimer();refreshNotifUI();showToast(`🔔 เปิดแจ้งเตือนแล้ว!`,'#43e97b');checkAndNotify(); }
+function disableNotifications(){ notifEnabled=false;localStorage.setItem('sv-notif','false');if(notifTimer){clearInterval(notifTimer);notifTimer=null;}refreshNotifUI();showToast('🔕 ปิดแจ้งเตือนแล้ว','#ffd166'); }
+function startTimer(){ if(notifTimer)clearInterval(notifTimer);notifTimer=setInterval(checkAndNotify,notifHours*60*60*1000); }
+function checkAndNotify(){ if(!notifEnabled||Notification.permission!=='granted')return;const near=entries.filter(e=>{const d=getDaysLeft(e.expiry);return d>=0&&d<=notifDays;});const expired=entries.filter(e=>getDaysLeft(e.expiry)<0);if(near.length>0)new Notification('⚠️ StreamVault — ใกล้หมดอายุ!',{body:near.map(e=>`• ${e.name} (${e.app}) เหลือ ${getDaysLeft(e.expiry)} วัน`).join('\n')});if(expired.length>0)new Notification('❌ StreamVault — หมดอายุแล้ว!',{body:expired.map(e=>`• ${e.name} (${e.app})`).join('\n')});if(!near.length&&!expired.length)showToast('✅ ทุกบัญชียังปกติ','#43e97b'); }
+function testNotification(){ if(Notification.permission!=='granted'){enableNotifications();return;}new Notification('🔔 StreamVault — ทดสอบแจ้งเตือน',{body:'ระบบแจ้งเตือนทำงานปกติ! 🎬'});showToast('🔔 ส่งทดสอบแล้ว!','#43e97b'); }
+if(notifEnabled&&Notification.permission==='granted')startTimer();
+
+function showToast(msg,color='#43e97b'){ const t=document.getElementById('toast');t.textContent=msg;t.style.color=color;t.style.borderColor=color;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3000); }
+function updateClock(){ document.getElementById('clock').textContent=new Date().toLocaleString('th-TH',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); }
+setInterval(updateClock,1000);updateClock();
+
+['modal','id-modal','slot-modal'].forEach(id=>{
+  document.getElementById(id).addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+});
+
+// ===== Init =====
+startSync();
+renderAppPills();
+refreshNotifUI();
+</script>
+</body>
+</html>
