@@ -147,6 +147,32 @@
   .toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--accent3);border-radius:10px;padding:12px 18px;font-size:14px;color:var(--accent3);z-index:999;transform:translateY(100px);opacity:0;transition:all 0.3s;max-width:320px}
   .toast.show{transform:translateY(0);opacity:1}
 
+  /* Link password checkbox */
+  .link-box { display:flex; align-items:flex-start; gap:10px; background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:14px; cursor:pointer; transition:border-color .2s; }
+  .link-box:hover { border-color:var(--accent); }
+  .link-box.on { border-color:var(--accent3); background:rgba(67,233,123,.06); }
+  .link-box input { width:18px !important; height:18px; margin-top:2px; accent-color:var(--accent3); flex-shrink:0; cursor:pointer; }
+  .link-box-txt b { font-size:13px; display:block; margin-bottom:2px; }
+  .link-box-txt span { font-size:11px; color:var(--muted); line-height:1.4; display:block; }
+
+  /* Gmail vault cards */
+  .gmail-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; }
+  .gmail-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden; transition:transform .2s,border-color .2s; }
+  .gmail-card:hover { transform:translateY(-2px); border-color:var(--accent); }
+  .gmail-head { padding:14px 16px; border-bottom:1px solid var(--border); }
+  .gmail-addr { font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:500; word-break:break-all; margin-bottom:8px; }
+  .gmail-pass-row { display:flex; align-items:center; gap:8px; background:var(--surface2); border-radius:8px; padding:7px 12px; }
+  .gmail-pass { font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--warn); flex:1; letter-spacing:1px; }
+  .gmail-body { padding:12px 16px; }
+  .gmail-sec-title { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
+  .gmail-apps { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; }
+  .gapp { display:inline-flex; align-items:center; gap:5px; border-radius:20px; padding:4px 11px; font-size:12px; font-weight:600; border:1px solid var(--border); }
+  .gapp.linked { background:rgba(67,233,123,.1); border-color:rgba(67,233,123,.4); color:var(--accent3); }
+  .gapp.solo { background:rgba(255,209,102,.08); border-color:rgba(255,209,102,.35); color:var(--warn); }
+  .gmail-foot { padding:12px 16px; border-top:1px solid var(--border); display:flex; gap:8px; }
+  .gmail-foot .btn-primary { flex:1; font-size:13px; padding:9px; }
+  .cnt-badge { font-size:11px; background:var(--surface2); border-radius:10px; padding:1px 7px; margin-left:4px; }
+
   /* App filter pills */
   .app-filter-bar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
   .app-pill { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; color:var(--muted); font-family:'Sarabun',sans-serif; }
@@ -208,6 +234,7 @@
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('accounts',this)">📋 บัญชีลูกค้า</button>
     <button class="tab-btn" onclick="switchTab('screens',this)">🖥️ จัดการจอ (ID)</button>
+    <button class="tab-btn" onclick="switchTab('gmails',this)">🔑 คลัง Gmail</button>
   </div>
 
   <!-- Tab: Accounts -->
@@ -232,6 +259,19 @@
   </div>
 
   <!-- Tab: Screens -->
+  <!-- Tab: Gmail vault -->
+  <div id="tab-gmails" style="display:none">
+    <div class="toolbar">
+      <input class="search-box" type="text" placeholder="🔍  ค้นหา Gmail..." id="gmail-search" oninput="renderGmails()">
+    </div>
+    <div class="notif-hint" style="margin-bottom:16px">
+      💡 เปลี่ยนรหัส 1 ครั้ง → อัปเดตทุกแอปที่ <b>ผูกรหัส</b> กับ Gmail นั้นอัตโนมัติ &nbsp;|&nbsp;
+      <span style="color:var(--accent3)">🔗 ผูกรหัส</span> = เปลี่ยนตาม &nbsp;
+      <span style="color:var(--warn)">🔒 รหัสแยก</span> = ไม่เปลี่ยน (เช่น Netflix)
+    </div>
+    <div class="gmail-grid" id="gmail-cards"></div>
+  </div>
+
   <div id="tab-screens" style="display:none">
     <div class="toolbar">
       <input class="search-box" type="text" placeholder="🔍  ค้นหาแอป, อีเมล..." id="screen-search" oninput="renderScreens()">
@@ -248,7 +288,7 @@
     <div class="form-group"><label>ชื่อลูกค้า</label><input type="text" id="f-name" placeholder="เช่น คุณสมใจ"></div>
     <div class="form-row">
       <div class="form-group"><label>แอปดูหนัง</label>
-        <select id="f-app">
+        <select id="f-app" onchange="onAppPicked()">
           <option value="">-- เลือกแอป --</option>
           <optgroup label="🎬 สตรีมมิ่งทั่วไป">
             <option value="Netflix">🎬 Netflix</option>
@@ -282,11 +322,18 @@
       </div>
       <div class="form-group"><label>วันหมดอายุ</label><input type="date" id="f-date"></div>
     </div>
-    <div class="form-group"><label>Gmail ที่ใช้</label><input type="email" id="f-email" placeholder="example@gmail.com"></div>
+    <div class="form-group"><label>Gmail ที่ใช้</label><input type="email" id="f-email" placeholder="example@gmail.com" oninput="onEmailTyped()" list="gmail-list"><datalist id="gmail-list"></datalist></div>
     <div class="form-group"><label>รหัสผ่าน</label>
       <div class="pass-input-wrap">
         <input type="password" id="f-pass" placeholder="ใส่รหัสผ่าน">
         <button class="pass-toggle" type="button" onclick="togglePassInput('f-pass',this)">👁️</button>
+      </div>
+    </div>
+    <div class="link-box" id="link-box" onclick="toggleLinkBox(event)">
+      <input type="checkbox" id="f-linkpass" onclick="event.stopPropagation();syncLinkBox()">
+      <div class="link-box-txt">
+        <b>🔗 ผูกรหัสผ่านกับ Gmail นี้</b>
+        <span>เปลี่ยนรหัสครั้งเดียวในคลัง Gmail จะอัปเดตทุกแอปที่ผูกไว้พร้อมกัน (แนะนำสำหรับแอปที่ล็อกอินด้วย Google เช่น DramaBox, DramaWave)</span>
       </div>
     </div>
     <div class="form-group"><label>หมายเหตุ</label><input type="text" id="f-note" placeholder="เช่น แพ็กเกจครอบครัว, 4 จอ"></div>
@@ -352,6 +399,29 @@
   </div>
 </div>
 
+<!-- Modal: Change Gmail password -->
+<div class="modal-backdrop" id="gpass-modal">
+  <div class="modal" style="max-width:430px">
+    <h2>🔑 เปลี่ยนรหัส Gmail</h2>
+    <div class="form-group">
+      <label>Gmail</label>
+      <input type="text" id="gp-email" readonly style="color:var(--muted)">
+    </div>
+    <div class="form-group">
+      <label>รหัสผ่านใหม่</label>
+      <div class="pass-input-wrap">
+        <input type="text" id="gp-pass" placeholder="พิมพ์รหัสใหม่">
+        <button class="pass-toggle" type="button" onclick="genPass()" title="สุ่มรหัส">🎲</button>
+      </div>
+    </div>
+    <div class="notif-hint" id="gp-preview">จะอัปเดตแอปที่ผูกไว้</div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeGpassModal()">ยกเลิก</button>
+      <button class="btn-primary full" onclick="saveGmailPass()">💾 อัปเดตทั้งหมด</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Slot -->
 <div class="modal-backdrop" id="slot-modal">
   <div class="modal" style="max-width:400px">
@@ -400,6 +470,7 @@ function startSync() {
     renderTable();
     renderAppPills();
     updateStats();
+    if(document.getElementById('tab-gmails').style.display!=='none') renderGmails();
     showSyncStatus(true);
   }, err => {
     console.error('entries sync error:', err);
@@ -502,7 +573,23 @@ function switchTab(tab,btn){
   btn.classList.add('active');
   document.getElementById('tab-accounts').style.display=tab==='accounts'?'block':'none';
   document.getElementById('tab-screens').style.display=tab==='screens'?'block':'none';
+  document.getElementById('tab-gmails').style.display=tab==='gmails'?'block':'none';
   if(tab==='screens') renderScreens();
+  if(tab==='gmails')  renderGmails();
+}
+
+// ===== Link-password defaults =====
+// แอปที่ล็อกอินด้วย Google → ผูกรหัสอัตโนมัติ
+const LINK_BY_DEFAULT = ['DramaBox','DramaWave','ReelShort','FlickReels','NetShort','GoodShort','ShortMax','iDrama','YouTube Premium'];
+function defaultLink(app){ return LINK_BY_DEFAULT.includes(app); }
+
+function toggleLinkBox(ev){
+  const cb=document.getElementById('f-linkpass');
+  cb.checked=!cb.checked; syncLinkBox();
+}
+function syncLinkBox(){
+  const cb=document.getElementById('f-linkpass');
+  document.getElementById('link-box').classList.toggle('on',cb.checked);
 }
 
 function setFilter(mode,btn){
@@ -552,6 +639,7 @@ function renderTable(){
           <div class="email-mono" title="${e.email}">${e.email}</div>
           <div class="pass-wrap" style="margin-top:4px">
             <span class="pass-mono" id="pass-${e.id}">••••••••</span>
+          <span title="${(e.linkPass!==undefined?e.linkPass:defaultLink(e.app))?'ผูกรหัสกับ Gmail นี้':'รหัสแยกอิสระ'}" style="font-size:11px">${(e.linkPass!==undefined?e.linkPass:defaultLink(e.app))?'🔗':'🔒'}</span>
             ${e.pass?`<button class="pass-eye" onclick="togglePass('${e.id}')" title="แสดง/ซ่อน">👁️</button>
             <button class="action-btn copy" onclick="copyPass('${e.id}')" style="padding:2px 7px;font-size:11px">📋</button>`:''}
           </div>
@@ -606,28 +694,174 @@ function openModal(id=null){
     document.getElementById('f-pass').value=e.pass||'';
     document.getElementById('f-date').value=e.expiry;
     document.getElementById('f-note').value=e.note||'';
+    document.getElementById('f-linkpass').checked = (e.linkPass!==undefined) ? !!e.linkPass : defaultLink(e.app);
   } else {
     ['f-name','f-app','f-email','f-pass','f-date','f-note'].forEach(i=>document.getElementById(i).value='');
+    document.getElementById('f-linkpass').checked=false;
   }
+  syncLinkBox();
   document.getElementById('modal').classList.add('open');
 }
 function closeModal(){ document.getElementById('modal').classList.remove('open'); editId_entry=null; }
 function saveEntry(){
   const name=document.getElementById('f-name').value.trim(),app=document.getElementById('f-app').value,
         email=document.getElementById('f-email').value.trim(),pass=document.getElementById('f-pass').value,
-        expiry=document.getElementById('f-date').value,note=document.getElementById('f-note').value.trim();
+        expiry=document.getElementById('f-date').value,note=document.getElementById('f-note').value.trim(),
+        linkPass=document.getElementById('f-linkpass').checked;
   if(!name||!app||!email||!expiry){showToast('⚠️ กรุณากรอกข้อมูลให้ครบ','#ffd166');return;}
+
+  let item;
   if(editId_entry){
-    const idx=entries.findIndex(e=>String(e.id)===String(editId_entry));
-    entries[idx]={...entries[idx],name,app,email,pass,expiry,note};
-    showToast('✅ แก้ไขเรียบร้อย');
+    const old=entries.find(e=>String(e.id)===String(editId_entry))||{};
+    item={...old,id:String(editId_entry),name,app,email,pass,expiry,note,linkPass};
   } else {
-    entries.push({id:Date.now(),name,app,email,pass,expiry,note});
-    showToast('✅ เพิ่มบัญชีเรียบร้อย');
+    item={id:String(Date.now()),name,app,email,pass,expiry,note,linkPass};
   }
-  showSyncStatus(false); saveEntries_remote(editId_entry ? entries.find(e=>e.id===editId_entry) : entries[entries.length-1]).then(()=>showSyncStatus(true)); closeModal();
+
+  showSyncStatus(false);
+  const jobs=[saveEntries_remote(item)];
+
+  // ถ้าผูกรหัส → อัปเดตทุกแอปที่ผูกกับ Gmail เดียวกันให้เป็นรหัสนี้
+  let spread=0;
+  if(linkPass && pass){
+    entries.forEach(e=>{
+      if(String(e.id)===String(item.id)) return;
+      if(e.email.toLowerCase()!==email.toLowerCase()) return;
+      if(!e.linkPass) return;              // 🔒 รหัสแยก → ข้าม
+      if(e.pass===pass) return;
+      spread++;
+      jobs.push(saveEntries_remote({...e,pass}));
+    });
+  }
+
+  Promise.all(jobs).then(()=>{
+    showSyncStatus(true);
+    showToast(spread>0
+      ? `✅ บันทึกแล้ว + อัปเดตรหัสอีก ${spread} แอปที่ผูกกับ Gmail นี้`
+      : (editId_entry?'✅ แก้ไขเรียบร้อย':'✅ เพิ่มบัญชีเรียบร้อย'),'#43e97b');
+  });
+  closeModal();
+}
+
+// เลือกแอปใหม่ → ติ๊กผูกรหัสอัตโนมัติตามชนิดแอป
+function onAppPicked(){
+  if(editId_entry) return;
+  const app=document.getElementById('f-app').value;
+  document.getElementById('f-linkpass').checked=defaultLink(app);
+  syncLinkBox();
+  onEmailTyped();
+}
+
+// พิมพ์อีเมลที่เคยใช้ → เติมรหัสให้อัตโนมัติ
+function onEmailTyped(){
+  const email=document.getElementById('f-email').value.trim().toLowerCase();
+  const passEl=document.getElementById('f-pass');
+  if(!email||passEl.value) return;
+  const known=entries.find(e=>e.email.toLowerCase()===email && e.linkPass && e.pass);
+  if(known && document.getElementById('f-linkpass').checked) passEl.value=known.pass;
 }
 function deleteEntry(id){ if(!confirm('ลบรายการนี้?'))return; showSyncStatus(false); deleteEntry_remote(String(id)).then(()=>{ showSyncStatus(true); showToast('🗑️ ลบแล้ว','#ff4757'); }); }
+
+// ===== Gmail Vault =====
+let gpassVisible={};
+
+function groupByGmail(){
+  const map={};
+  entries.forEach(e=>{
+    const key=(e.email||'').toLowerCase().trim();
+    if(!key) return;
+    if(!map[key]) map[key]={email:e.email,linked:[],solo:[],pass:''};
+    const isLink = (e.linkPass!==undefined) ? !!e.linkPass : defaultLink(e.app);
+    (isLink?map[key].linked:map[key].solo).push(e);
+    if(isLink && e.pass) map[key].pass=e.pass;
+    if(!map[key].pass && e.pass) map[key].pass=e.pass;
+  });
+  return map;
+}
+
+function renderGmails(){
+  const q=(document.getElementById('gmail-search').value||'').toLowerCase();
+  const box=document.getElementById('gmail-cards');
+  const map=groupByGmail();
+  const keys=Object.keys(map).filter(k=>!q||k.includes(q)).sort();
+
+  // datalist สำหรับ autocomplete ในฟอร์ม
+  const dl=document.getElementById('gmail-list');
+  if(dl) dl.innerHTML=Object.values(map).map(g=>`<option value="${g.email}">`).join('');
+
+  if(keys.length===0){
+    box.innerHTML=`<div style="text-align:center;padding:48px;color:var(--muted);grid-column:1/-1">ยังไม่มี Gmail — เพิ่มบัญชีลูกค้าก่อนได้เลย</div>`;
+    return;
+  }
+
+  box.innerHTML=keys.map(k=>{
+    const g=map[k];
+    const total=g.linked.length+g.solo.length;
+    const shown=gpassVisible[k];
+    const chip=e=>{
+      const color=APP_COLORS[e.app]||'#888', emoji=APP_EMOJI[e.app]||'📱';
+      return `<span class="gapp ${(e.linkPass!==undefined?e.linkPass:defaultLink(e.app))?'linked':'solo'}">${emoji} ${e.app}</span>`;
+    };
+    return `<div class="gmail-card">
+      <div class="gmail-head">
+        <div class="gmail-addr">${g.email}<span class="cnt-badge">${total} แอป</span></div>
+        <div class="gmail-pass-row">
+          <span class="gmail-pass">${shown?(g.pass||'(ยังไม่มีรหัส)'):'••••••••••'}</span>
+          <button class="pass-eye" onclick="toggleGpass('${k}')">${shown?'🙈':'👁️'}</button>
+          ${g.pass?`<button class="action-btn copy" onclick="copyText('${g.pass.replace(/'/g,"\\'")}')" style="padding:2px 8px;font-size:11px">📋</button>`:''}
+        </div>
+      </div>
+      <div class="gmail-body">
+        ${g.linked.length?`<div class="gmail-sec-title">🔗 ผูกรหัส — เปลี่ยนพร้อมกัน (${g.linked.length})</div>
+        <div class="gmail-apps">${g.linked.map(chip).join('')}</div>`:''}
+        ${g.solo.length?`<div class="gmail-sec-title">🔒 รหัสแยก — ไม่เปลี่ยนตาม (${g.solo.length})</div>
+        <div class="gmail-apps">${g.solo.map(chip).join('')}</div>`:''}
+      </div>
+      <div class="gmail-foot">
+        <button class="btn-primary" onclick="openGpassModal('${k}')">🔑 เปลี่ยนรหัสทั้งชุด</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleGpass(k){ gpassVisible[k]=!gpassVisible[k]; renderGmails(); }
+function copyText(t){ navigator.clipboard.writeText(t).then(()=>showToast('📋 คัดลอกแล้ว','#43e97b')); }
+
+let gpassTarget=null;
+function openGpassModal(k){
+  gpassTarget=k;
+  const g=groupByGmail()[k];
+  document.getElementById('gp-email').value=g.email;
+  document.getElementById('gp-pass').value='';
+  const names=g.linked.map(e=>e.app).join(', ')||'—';
+  document.getElementById('gp-preview').innerHTML=
+    `จะอัปเดต <b style="color:var(--accent3)">${g.linked.length} แอป</b>: ${names}` +
+    (g.solo.length?`<br>🔒 ไม่แตะ: ${g.solo.map(e=>e.app).join(', ')}`:'');
+  document.getElementById('gpass-modal').classList.add('open');
+}
+function closeGpassModal(){ document.getElementById('gpass-modal').classList.remove('open'); gpassTarget=null; }
+
+function genPass(){
+  const cs='abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s=''; for(let i=0;i<12;i++) s+=cs[Math.floor(Math.random()*cs.length)];
+  document.getElementById('gp-pass').value=s;
+}
+
+function saveGmailPass(){
+  const np=document.getElementById('gp-pass').value.trim();
+  if(!np){ showToast('⚠️ กรุณาใส่รหัสใหม่','#ffd166'); return; }
+  const g=groupByGmail()[gpassTarget];
+  if(!g||g.linked.length===0){ showToast('⚠️ Gmail นี้ยังไม่มีแอปที่ผูกรหัส','#ffd166'); return; }
+  showSyncStatus(false);
+  const jobs=g.linked.map(e=>saveEntries_remote({...e,pass:np,linkPass:true}));
+  Promise.all(jobs).then(()=>{
+    showSyncStatus(true);
+    gpassVisible[gpassTarget]=true;
+    showToast(`✅ อัปเดตรหัสแล้ว ${g.linked.length} แอป`,'#43e97b');
+    renderGmails();
+  }).catch(()=>showToast('❌ อัปเดตไม่สำเร็จ','#ff4757'));
+  closeGpassModal();
+}
 
 // ===== Screens =====
 function renderScreens(){
@@ -789,7 +1023,7 @@ function showToast(msg,color='#43e97b'){ const t=document.getElementById('toast'
 function updateClock(){ document.getElementById('clock').textContent=new Date().toLocaleString('th-TH',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); }
 setInterval(updateClock,1000);updateClock();
 
-['modal','id-modal','slot-modal'].forEach(id=>{
+['modal','id-modal','slot-modal','gpass-modal'].forEach(id=>{
   document.getElementById(id).addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
 });
 
