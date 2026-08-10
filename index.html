@@ -147,6 +147,14 @@
   .toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--accent3);border-radius:10px;padding:12px 18px;font-size:14px;color:var(--accent3);z-index:999;transform:translateY(100px);opacity:0;transition:all 0.3s;max-width:320px}
   .toast.show{transform:translateY(0);opacity:1}
 
+  /* Period pills */
+  .period-bar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
+  .pd-pill { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer; transition:all .2s; color:var(--muted); font-family:'Sarabun',sans-serif; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+  .pd-pill:hover { border-color:var(--accent2); color:var(--text); }
+  .pd-pill.active { background:var(--accent2); color:#fff; border-color:transparent; }
+  .pd-pill .pd-cnt { font-size:10px; background:rgba(255,255,255,.2); border-radius:10px; padding:1px 6px; }
+  .pd-badge { display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; margin-top:4px; }
+
   /* Linked apps preview in modal */
   .lp-wrap { margin-top:10px; padding-top:10px; border-top:1px dashed var(--border); }
   .lp-title { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin-bottom:7px; display:flex; align-items:center; gap:5px; }
@@ -280,6 +288,9 @@
     <div class="app-filter-bar" id="app-filter-bar">
       <!-- Populated by JS -->
     </div>
+    <div class="period-bar" id="period-bar">
+      <!-- Populated by JS -->
+    </div>
     <div class="table-wrap">
       <table>
         <thead><tr><th>ลูกค้า</th><th>แอป</th><th>อีเมล & รหัสผ่าน</th><th>หมดอายุ (ลูกค้า / ID จริง)</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
@@ -351,6 +362,21 @@
         </select>
       </div>
       <div class="form-group"><label>👤 หมดอายุลูกค้า</label><input type="date" id="f-date"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>⏳ ระยะเวลาแพ็กเกจ</label>
+        <select id="f-period" onchange="onPeriodPicked()">
+          <option value="">-- ไม่ระบุ --</option>
+          <option value="7d">7 วัน</option>
+          <option value="30d">30 วัน</option>
+          <option value="3m">3 เดือน</option>
+          <option value="6m">6 เดือน</option>
+          <option value="1y">1 ปี</option>
+        </select>
+      </div>
+      <div class="form-group"><label>&nbsp;</label>
+        <button type="button" class="btn-secondary" style="width:100%" onclick="applyPeriodDate()">📅 คำนวณวันหมดอายุจากวันนี้</button>
+      </div>
     </div>
     <div class="form-group"><label>Gmail ที่ใช้</label><input type="email" id="f-email" placeholder="example@gmail.com" oninput="onEmailTyped()" list="gmail-list"><datalist id="gmail-list"></datalist></div>
     <div class="form-group"><label>🏷️ หมดอายุจริงของ ID (แอปตัดรอบ)</label><input type="date" id="f-realdate"><div style="font-size:11px;color:var(--muted);margin-top:5px">เว้นว่างได้ ถ้าใช้วันเดียวกับลูกค้า</div></div>
@@ -490,7 +516,7 @@ db.enablePersistence().catch(()=>{});
 // ===== Data =====
 let entries = [];
 let ids     = [];
-let editId_entry = null, editId_id = null, filterMode = 'all', appFilter = 'all';
+let editId_entry = null, editId_id = null, filterMode = 'all', appFilter = 'all', periodFilter = 'all';
 let slotTarget = null;
 let _unsubEntries = null, _unsubIds = null;
 
@@ -502,6 +528,7 @@ function startSync() {
     entries = snap.docs.map(d => ({ ...d.data(), id: d.id }));
     renderTable();
     renderAppPills();
+    renderPeriodPills();
     updateStats();
     if(document.getElementById('tab-gmails').style.display!=='none') renderGmails();
     showSyncStatus(true);
@@ -580,7 +607,7 @@ function fmtWhen(ts){
 // สร้างรายการสิ่งที่เปลี่ยน เทียบของเก่ากับของใหม่
 function diffFields(oldE,newE){
   const F=[['name','ชื่อลูกค้า'],['app','แอป'],['email','อีเมล'],['pass','รหัสผ่าน'],
-           ['expiry','วันหมดอายุลูกค้า'],['realExpiry','วันหมดอายุ ID จริง'],['note','หมายเหตุ']];
+           ['expiry','วันหมดอายุลูกค้า'],['realExpiry','วันหมดอายุ ID จริง'],['period','ระยะเวลาแพ็กเกจ'],['note','หมายเหตุ']];
   const out=[];
   F.forEach(([k,label])=>{ if((oldE[k]||'')!==(newE[k]||'')) out.push(label); });
   return out;
@@ -650,6 +677,74 @@ function switchTab(tab,btn){
   if(tab==='screens') renderScreens();
   if(tab==='gmails')  renderGmails();
 }
+
+// ===== Period (ระยะเวลาแพ็กเกจ) =====
+const PERIODS = [
+  {k:'7d', label:'7 วัน',   icon:'⚡', color:'#43e97b', days:7},
+  {k:'30d',label:'30 วัน',  icon:'📅', color:'#6c63ff', days:30},
+  {k:'3m', label:'3 เดือน', icon:'🗓️', color:'#00a8e1', days:90},
+  {k:'6m', label:'6 เดือน', icon:'📆', color:'#ffd166', days:180},
+  {k:'1y', label:'1 ปี',    icon:'🏆', color:'#ff6584', days:365},
+];
+const PD = {}; PERIODS.forEach(p=>PD[p.k]=p);
+
+// เดาระยะเวลาจากข้อมูลเก่าที่ยังไม่ได้ระบุ
+function periodOf(e){
+  if(e.period) return e.period;
+  const base = e.createdAt ? new Date(e.createdAt) : null;
+  if(!base || !e.expiry) return '';
+  const span = Math.round((new Date(e.expiry)-base)/86400000);
+  if(span<=0) return '';
+  let best='', diff=1e9;
+  PERIODS.forEach(p=>{ const d=Math.abs(span-p.days); if(d<diff && d<=10){diff=d;best=p.k;} });
+  return best;
+}
+
+function periodBadge(e){
+  const k=periodOf(e);
+  if(!k) return '';
+  const p=PD[k];
+  return `<div class="pd-badge" style="background:${p.color}1f;color:${p.color}">${p.icon} ${p.label}</div>`;
+}
+
+function onPeriodPicked(){
+  const k=document.getElementById('f-period').value;
+  if(!k) return;
+  if(!document.getElementById('f-date').value) applyPeriodDate();
+}
+
+function applyPeriodDate(){
+  const k=document.getElementById('f-period').value;
+  if(!k){ showToast('⚠️ เลือกระยะเวลาก่อน','#ffd166'); return; }
+  const d=new Date();
+  if(k==='7d') d.setDate(d.getDate()+7);
+  else if(k==='30d') d.setDate(d.getDate()+30);
+  else if(k==='3m') d.setMonth(d.getMonth()+3);
+  else if(k==='6m') d.setMonth(d.getMonth()+6);
+  else if(k==='1y') d.setFullYear(d.getFullYear()+1);
+  document.getElementById('f-date').value=d.toISOString().split('T')[0];
+  showToast(`📅 ตั้งวันหมดอายุเป็น ${d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'})}`,'#43e97b');
+}
+
+function renderPeriodPills(){
+  const bar=document.getElementById('period-bar');
+  if(!bar) return;
+  const cnt={}; let none=0;
+  entries.forEach(e=>{ const k=periodOf(e); if(k) cnt[k]=(cnt[k]||0)+1; else none++; });
+
+  let html=`<span class="app-pill-label">ระยะเวลา:</span>`;
+  html+=`<button class="pd-pill ${periodFilter==='all'?'active':''}" onclick="setPeriodFilter('all')">ทั้งหมด <span class="pd-cnt">${entries.length}</span></button>`;
+  PERIODS.forEach(p=>{
+    if(!cnt[p.k]) return;
+    const on=periodFilter===p.k;
+    html+=`<button class="pd-pill ${on?'active':''}" style="${on?`background:${p.color};`:`border-color:${p.color}44;color:${p.color};`}" onclick="setPeriodFilter('${p.k}')">
+      ${p.icon} ${p.label} <span class="pd-cnt" style="${on?'':`background:${p.color}22;color:${p.color}`}">${cnt[p.k]}</span></button>`;
+  });
+  if(none) html+=`<button class="pd-pill ${periodFilter==='none'?'active':''}" onclick="setPeriodFilter('none')">❓ ไม่ระบุ <span class="pd-cnt">${none}</span></button>`;
+  bar.innerHTML=html;
+}
+
+function setPeriodFilter(k){ periodFilter=k; renderPeriodPills(); renderTable(); }
 
 // ===== Link-password defaults =====
 // แอปที่ล็อกอินด้วย Google → ผูกรหัสอัตโนมัติ
@@ -732,6 +827,7 @@ function renderTable(){
   let filtered=entries.filter(e=>{
     if(filterMode!=='all'&&getStatus(effDays(e))!==filterMode) return false;
     if(appFilter!=='all'&&e.app!==appFilter) return false;
+    if(periodFilter!=='all'){ const pk=periodOf(e); if(periodFilter==='none'? !!pk : pk!==periodFilter) return false; }
     if(q&&!e.name.toLowerCase().includes(q)&&!e.email.toLowerCase().includes(q)&&!e.app.toLowerCase().includes(q)) return false;
     return true;
   });
@@ -760,6 +856,7 @@ function renderTable(){
       const color=APP_COLORS[e.app]||'#888',emoji=APP_EMOJI[e.app]||'📱';
       return `<tr id="row-${e.id}">
         <td><div class="customer-name">${e.name}</div>${e.note?`<div class="customer-note">💬 ${e.note}</div>`:''}
+          ${periodBadge(e)}
           ${e.updatedAt?`<div class="edited-note">🕐 แก้ล่าสุด <b>${fmtWhen(e.updatedAt)}</b></div>`:''}</td>
         <td><div class="app-badge"><div class="app-icon" style="background:${color}22;color:${color}">${emoji}</div>${e.app}</div></td>
         <td>
@@ -826,10 +923,11 @@ function openModal(id=null){
     document.getElementById('f-pass').value=e.pass||'';
     document.getElementById('f-date').value=e.expiry;
     document.getElementById('f-realdate').value=e.realExpiry||'';
+    document.getElementById('f-period').value=e.period||periodOf(e)||'';
     document.getElementById('f-note').value=e.note||'';
     document.getElementById('f-linkpass').checked = (e.linkPass!==undefined) ? !!e.linkPass : defaultLink(e.app);
   } else {
-    ['f-name','f-app','f-email','f-pass','f-date','f-realdate','f-note'].forEach(i=>document.getElementById(i).value='');
+    ['f-name','f-app','f-email','f-pass','f-date','f-realdate','f-note','f-period'].forEach(i=>document.getElementById(i).value='');
     document.getElementById('f-linkpass').checked=false;
   }
   syncLinkBox();
@@ -856,17 +954,18 @@ function saveEntry(){
         email=document.getElementById('f-email').value.trim(),pass=document.getElementById('f-pass').value,
         expiry=document.getElementById('f-date').value,note=document.getElementById('f-note').value.trim(),
         realExpiry=document.getElementById('f-realdate').value||'',
+        period=document.getElementById('f-period').value||'',
         linkPass=document.getElementById('f-linkpass').checked;
   if(!name||!app||!email||!expiry){showToast('⚠️ กรุณากรอกข้อมูลให้ครบ','#ffd166');return;}
 
   let item, changed=[];
   if(editId_entry){
     const prev=entries.find(e=>String(e.id)===String(editId_entry))||{};
-    item={...prev,id:String(editId_entry),name,app,email,pass,expiry,realExpiry,note,linkPass};
+    item={...prev,id:String(editId_entry),name,app,email,pass,expiry,realExpiry,period,note,linkPass};
     changed=diffFields(prev,item);
     if(changed.length) pushHistory(item,changed);
   } else {
-    item={id:String(Date.now()),name,app,email,pass,expiry,realExpiry,note,linkPass,
+    item={id:String(Date.now()),name,app,email,pass,expiry,realExpiry,period,note,linkPass,
           createdAt:Date.now(),updatedAt:Date.now(),passUpdatedAt:pass?Date.now():null,
           history:[{t:Date.now(),c:'สร้างรายการใหม่'}]};
   }
@@ -1188,6 +1287,7 @@ setInterval(updateClock,1000);updateClock();
 // ===== Init =====
 startSync();
 renderAppPills();
+renderPeriodPills();
 refreshNotifUI();
 </script>
 </body>
