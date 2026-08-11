@@ -147,6 +147,29 @@
   .toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--accent3);border-radius:10px;padding:12px 18px;font-size:14px;color:var(--accent3);z-index:999;transform:translateY(100px);opacity:0;transition:all 0.3s;max-width:320px}
   .toast.show{transform:translateY(0);opacity:1}
 
+  /* Email collapsible bars */
+  .mail-bar td { padding:0 !important; background:transparent !important; }
+  .mail-bar-inner { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--surface2); border-bottom:1px solid var(--border); cursor:pointer; transition:background .15s; }
+  .mail-bar-inner:hover { background:#20202e; }
+  .mail-bar-inner.open { background:rgba(108,99,255,.10); border-left:3px solid var(--accent); padding-left:11px; }
+  .mb-arrow { font-size:11px; color:var(--muted); width:12px; flex-shrink:0; transition:transform .2s; }
+  .mail-bar-inner.open .mb-arrow { transform:rotate(90deg); color:var(--accent); }
+  .mb-mail { font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-weight:500; flex-shrink:0; }
+  .mb-icons { display:flex; gap:3px; flex-wrap:wrap; }
+  .mb-ic { width:20px; height:20px; border-radius:5px; display:flex; align-items:center; justify-content:center; font-size:11px; }
+  .mb-pass { font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--warn); }
+  .mb-spacer { flex:1; }
+  .mb-chip { font-size:10px; padding:2px 8px; border-radius:20px; font-weight:700; white-space:nowrap; }
+  .mb-chip.n { background:rgba(108,99,255,.15); color:var(--accent); }
+  .mb-chip.w { background:rgba(255,209,102,.15); color:var(--warn); }
+  .mb-chip.e { background:rgba(255,71,87,.15); color:var(--danger); }
+  .mb-chip.ok { background:rgba(67,233,123,.12); color:var(--accent3); }
+  .child-row td { background:rgba(0,0,0,.18); }
+  .child-row td:first-child { border-left:3px solid var(--accent); }
+  .collapse-tools { display:flex; gap:8px; margin-bottom:14px; align-items:center; flex-wrap:wrap; }
+  .ct-btn { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:8px 14px; color:var(--muted); font-family:'Sarabun',sans-serif; font-size:13px; cursor:pointer; transition:all .2s; }
+  .ct-btn:hover { border-color:var(--accent); color:var(--accent); }
+
   /* Period pills */
   .period-bar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
   .pd-pill { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:5px 12px; font-size:12px; font-weight:600; cursor:pointer; transition:all .2s; color:var(--muted); font-family:'Sarabun',sans-serif; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
@@ -290,6 +313,11 @@
     </div>
     <div class="period-bar" id="period-bar">
       <!-- Populated by JS -->
+    </div>
+    <div class="collapse-tools">
+      <button class="ct-btn" onclick="collapseAll()">📂 ยุบทั้งหมด</button>
+      <button class="ct-btn" onclick="expandAll()">📖 ขยายทั้งหมด</button>
+      <span style="font-size:11px;color:var(--muted)" id="collapse-info"></span>
     </div>
     <div class="table-wrap">
       <table>
@@ -517,6 +545,7 @@ db.enablePersistence().catch(()=>{});
 let entries = [];
 let ids     = [];
 let editId_entry = null, editId_id = null, filterMode = 'all', appFilter = 'all', periodFilter = 'all';
+let mailOpen = {};   // อีเมลไหนกำลังเปิดอยู่ (ค่าเริ่มต้น: ยุบทั้งหมด)
 let slotTarget = null;
 let _unsubEntries = null, _unsubIds = null;
 
@@ -840,7 +869,7 @@ function renderTable(){
   CAT_ORDER.forEach(c=>groups[c]=[]);
   filtered.forEach(e=>{ const cat=APP_CAT[e.app]||'อื่นๆ'; if(!groups[cat])groups[cat]=[]; groups[cat].push(e); });
 
-  let html='';
+  let html='', openCnt=0, totalMail=0;
   CAT_ORDER.forEach(cat=>{
     const list=groups[cat];
     if(!list||list.length===0) return;
@@ -848,13 +877,47 @@ function renderTable(){
       <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px">${CAT_ICON[cat]} ${cat}</span>
       <span style="font-size:11px;color:var(--muted);margin-left:6px">(${list.length} รายการ)</span>
     </td></tr>`;
-    html+=list.map(e=>{
+
+    // จัดกลุ่มย่อยตามอีเมล
+    const byMail={};
+    list.forEach(e=>{ const k=(e.email||'ไม่มีอีเมล').toLowerCase().trim(); (byMail[k]=byMail[k]||[]).push(e); });
+
+    Object.keys(byMail).forEach(mk=>{
+      const grp=byMail[mk];
+      totalMail++;
+      const isOpen = !!mailOpen[mk];
+      if(isOpen) openCnt++;
+      const minDays=Math.min(...grp.map(effDays));
+      const st=getStatus(minDays);
+      const chipCls = st==='expired'?'e':st==='warning'?'w':'ok';
+      const chipTxt = minDays<0?`หมด ${Math.abs(minDays)} วันแล้ว`:minDays===0?'หมดวันนี้!':`เหลือ ${minDays} วัน`;
+      const pass=(grp.find(e=>e.pass)||{}).pass||'';
+      const icons=grp.map(e=>{
+        const cl=APP_COLORS[e.app]||'#888', em=APP_EMOJI[e.app]||'📱';
+        return `<span class="mb-ic" style="background:${cl}26;color:${cl}" title="${e.app} — ${e.name}">${em}</span>`;
+      }).join('');
+
+      html+=`<tr class="mail-bar"><td colspan="6">
+        <div class="mail-bar-inner ${isOpen?'open':''}" onclick="toggleMail('${mk.replace(/'/g,"\\'")}')">
+          <span class="mb-arrow">▶</span>
+          <span class="mb-mail">${grp[0].email||'(ไม่มีอีเมล)'}</span>
+          <div class="mb-icons">${icons}</div>
+          ${pass?`<span class="mb-pass">🔑 ${pass}</span>`:''}
+          <span class="mb-spacer"></span>
+          <span class="mb-chip n">${grp.length} รายการ</span>
+          <span class="mb-chip ${chipCls}">${chipTxt}</span>
+        </div>
+      </td></tr>`;
+
+      if(!isOpen) return;   // ยุบอยู่ → ไม่ต้องวาดแถวย่อย
+
+    html+=grp.map(e=>{
       const dCust=getDaysLeft(e.expiry);
       const dReal=e.realExpiry?getDaysLeft(e.realExpiry):null;
       const days=effDays(e), status=getStatus(days);
       const statusLabel={active:'ปกติ',warning:'ใกล้หมด',expired:'หมดแล้ว'}[status];
       const color=APP_COLORS[e.app]||'#888',emoji=APP_EMOJI[e.app]||'📱';
-      return `<tr id="row-${e.id}">
+      return `<tr id="row-${e.id}" class="child-row">
         <td><div class="customer-name">${e.name}</div>${e.note?`<div class="customer-note">💬 ${e.note}</div>`:''}
           ${periodBadge(e)}
           ${e.updatedAt?`<div class="edited-note">🕐 แก้ล่าสุด <b>${fmtWhen(e.updatedAt)}</b></div>`:''}</td>
@@ -883,9 +946,20 @@ function renderTable(){
         </div></td>
       </tr>`;
     }).join('');
+    });
   });
   tbody.innerHTML=html;
+  const info=document.getElementById('collapse-info');
+  if(info) info.textContent=`${totalMail} Gmail · เปิดอยู่ ${openCnt}`;
   updateStats();
+}
+
+// ===== Collapse / Expand =====
+function toggleMail(k){ mailOpen[k]=!mailOpen[k]; renderTable(); }
+function collapseAll(){ mailOpen={}; renderTable(); showToast('📂 ยุบทุก Gmail แล้ว','#6c63ff'); }
+function expandAll(){
+  entries.forEach(e=>{ mailOpen[(e.email||'ไม่มีอีเมล').toLowerCase().trim()]=true; });
+  renderTable(); showToast('📖 ขยายทุก Gmail แล้ว','#43e97b');
 }
 
 // ===== Duplicate Entry =====
