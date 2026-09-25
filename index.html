@@ -251,7 +251,34 @@
   @media(max-width:700px){
     .stats-bar{grid-template-columns:repeat(2,1fr)}
     .form-row{grid-template-columns:1fr}
-    .table-wrap::after{content:'⟵ เลื่อนดูปุ่มจัดการ ⟶';display:block;text-align:center;font-size:10px;color:var(--muted);padding:6px;background:var(--surface2);}
+    .table-wrap{overflow-x:visible}
+    table{min-width:0}
+    thead{display:none}
+    table, tbody, tr, td{display:block; width:100%}
+    tr.mail-bar{width:100%}
+    tr.child-row{
+      border-bottom:1px solid var(--border);
+      background:rgba(0,0,0,.18);
+      padding:4px 0 10px;
+    }
+    tr.child-row td{
+      padding:4px 14px;
+      border:none;
+    }
+    tr.child-row td:nth-child(2){ padding-top:0 }
+    tr.child-row td:before{
+      content:attr(data-label);
+      display:block;
+      font-size:10px;
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.5px;
+      margin-bottom:4px;
+    }
+    tr.child-row .actions{ flex-wrap:wrap; gap:8px; }
+    tr.child-row .actions .action-btn{ flex:1; min-width:64px; text-align:center; padding:8px 6px; font-size:12px; }
+    tr.empty-row{ display:block; }
+    tr.empty-row td{ display:block; }
   }
 </style>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -915,6 +942,7 @@ function renderTable(){
           <span class="mb-mail">${grp[0].email||'(ไม่มีอีเมล)'}</span>
           <div class="mb-icons">${icons}</div>
           ${pass?`<span class="mb-pass">🔑 ${pass}</span>`:''}
+          ${grp[0]&&grp[0].email?`<button class="action-btn copy" onclick="event.stopPropagation();copyBoth('${grp[0].id}')" title="คัดลอกอีเมล+รหัส" style="background:rgba(67,233,123,.12);border-color:rgba(67,233,123,.35);color:var(--accent3);padding:2px 8px;font-size:11px">📋 ทั้งหมด</button>`:''}
           <span class="mb-spacer"></span>
           <span class="mb-chip n">${grp.length} รายการ</span>
           <span class="mb-chip ${chipCls}">${chipTxt}</span>
@@ -930,11 +958,11 @@ function renderTable(){
       const statusLabel={active:'ปกติ',warning:'ใกล้หมด',expired:'หมดแล้ว'}[status];
       const color=APP_COLORS[e.app]||'#888',emoji=APP_EMOJI[e.app]||'📱';
       return `<tr id="row-${e.id}" class="child-row">
-        <td><div class="customer-name">${e.name}</div>${e.note?`<div class="customer-note">💬 ${e.note}</div>`:''}
+        <td data-label="ลูกค้า"><div class="customer-name">${e.name}</div>${e.note?`<div class="customer-note">💬 ${e.note}</div>`:''}
           ${periodBadge(e)}
           ${e.updatedAt?`<div class="edited-note">🕐 แก้ล่าสุด <b>${fmtWhen(e.updatedAt)}</b></div>`:''}</td>
-        <td><div class="app-badge"><div class="app-icon" style="background:${color}22;color:${color}">${emoji}</div>${e.app}</div></td>
-        <td>
+        <td data-label="แอป"><div class="app-badge"><div class="app-icon" style="background:${color}22;color:${color}">${emoji}</div>${e.app}</div></td>
+        <td data-label="อีเมล & รหัสผ่าน">
           <div class="email-mono" title="${e.email}">${e.email}</div>
           <div class="pass-wrap" style="margin-top:4px">
             <span class="pass-mono" id="pass-${e.id}">${e.pass||'—'}</span>
@@ -943,18 +971,19 @@ function renderTable(){
           </div>
           ${e.passUpdatedAt?`<div class="edited-note">🔑 เปลี่ยนรหัส ${fmtWhen(e.passUpdatedAt)}</div>`:''}
         </td>
-        <td><div class="dual-exp">
+        <td data-label="หมดอายุ (ลูกค้า / ID จริง)"><div class="dual-exp">
           <div class="exp-line"><span class="exp-tag cust">ลูกค้า</span><span class="expiry ${expClsFor(dCust)}">${fmtDate(e.expiry)}</span>${pillFor(dCust)}</div>
           ${e.realExpiry
             ? `<div class="exp-line"><span class="exp-tag real">ID จริง</span><span class="expiry ${expClsFor(dReal)}">${fmtDate(e.realExpiry)}</span>${pillFor(dReal)}</div>`
             : `<div class="exp-line"><span class="exp-tag real">ID จริง</span><span class="exp-empty">ใช้วันเดียวกัน</span></div>`}
         </div></td>
-        <td><span class="status ${status}">${statusLabel}</span></td>
-        <td><div class="actions">
-          <button class="action-btn copy" onclick="copyEmail('${e.id}')" title="คัดลอกอีเมล">📋</button>
+        <td data-label="สถานะ"><span class="status ${status}">${statusLabel}</span></td>
+        <td data-label="จัดการ"><div class="actions">
+          <button class="action-btn copy" onclick="copyEmail('${e.id}')" title="คัดลอกอีเมล">📋 อีเมล</button>
+          <button class="action-btn copy" onclick="copyBoth('${e.id}')" title="คัดลอกทั้งอีเมลและรหัส" style="background:rgba(67,233,123,.12);border-color:rgba(67,233,123,.35);color:var(--accent3)">📋 ทั้งหมด</button>
           <button class="action-btn dup" onclick="duplicateEntry('${e.id}')" title="ทำสำเนา">⧉ สำเนา</button>
-          <button class="action-btn" onclick="openModal('${e.id}')" title="แก้ไข">✏️</button>
-          <button class="action-btn del" onclick="deleteEntry('${e.id}')" title="ลบ">🗑️</button>
+          <button class="action-btn" onclick="openModal('${e.id}')" title="แก้ไข">✏️ แก้ไข</button>
+          <button class="action-btn del" onclick="deleteEntry('${e.id}')" title="ลบ">🗑️ ลบ</button>
         </div></td>
       </tr>`;
     }).join('');
@@ -996,6 +1025,12 @@ function togglePass(id){
 }
 function copyPass(id){ const e=entries.find(x=>String(x.id)===String(id)); navigator.clipboard.writeText(e.pass||'').then(()=>showToast('📋 คัดลอกรหัสผ่านแล้ว','#43e97b')); }
 function copyEmail(id){ const e=entries.find(x=>String(x.id)===String(id)); navigator.clipboard.writeText(e.email).then(()=>showToast('📋 คัดลอกอีเมลแล้ว','#43e97b')); }
+function copyBoth(id){
+  const e=entries.find(x=>String(x.id)===String(id));
+  if(!e) return;
+  const txt=`${e.email}\n${e.pass||''}`;
+  navigator.clipboard.writeText(txt).then(()=>showToast('📋 คัดลอกอีเมล + รหัสผ่านแล้ว','#43e97b'));
+}
 function togglePassInput(inputId,btn){ const inp=document.getElementById(inputId); inp.type=inp.type==='password'?'text':'password'; btn.textContent=inp.type==='password'?'👁️':'🙈'; }
 
 function openModal(id=null){
