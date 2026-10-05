@@ -205,6 +205,14 @@
   .hist-row:last-child { border-bottom:none; }
   .hist-what { color:var(--text); }
   .hist-when { color:var(--muted); font-family:'IBM Plex Mono',monospace; white-space:nowrap; }
+  .hist-item { padding:6px 0; border-bottom:1px solid rgba(42,42,61,.5); }
+  .hist-item:last-child { border-bottom:none; }
+  .hist-top { display:flex; justify-content:space-between; gap:10px; font-size:10px; color:var(--muted); margin-bottom:3px; }
+  .hist-field { display:flex; align-items:center; gap:6px; font-size:11px; margin-top:2px; flex-wrap:wrap; }
+  .hist-field b { color:var(--text); font-weight:600; min-width:80px; }
+  .hist-old { color:var(--danger); text-decoration:line-through; font-family:'IBM Plex Mono',monospace; }
+  .hist-arrow { color:var(--muted); }
+  .hist-new { color:var(--accent3); font-weight:600; font-family:'IBM Plex Mono',monospace; }
 
   /* Dual expiry */
   .dual-exp { display:flex; flex-direction:column; gap:4px; }
@@ -677,16 +685,25 @@ function diffFields(oldE,newE){
   const F=[['name','ชื่อลูกค้า'],['app','แอป'],['email','อีเมล'],['pass','รหัสผ่าน'],
            ['expiry','วันหมดอายุลูกค้า'],['realExpiry','วันหมดอายุ ID จริง'],['period','ระยะเวลาแพ็กเกจ'],['note','หมายเหตุ']];
   const out=[];
-  F.forEach(([k,label])=>{ if((oldE[k]||'')!==(newE[k]||'')) out.push(label); });
+  F.forEach(([k,label])=>{
+    const a=oldE[k]||'', b=newE[k]||'';
+    if(a!==b) out.push({key:k,label,from:a,to:b});
+  });
   return out;
 }
 // เขียนประวัติ (เก็บล่าสุด 8 รายการ)
 function pushHistory(item,changes){
+  // changes: array of {key,label,from,to}  หรือ  array of string (เช่น 'สร้างรายการใหม่', 'รหัสผ่าน (ตาม Gmail)')
   const h=Array.isArray(item.history)?item.history.slice():[];
-  h.unshift({t:Date.now(),c:changes.join(', ')});
+  const isObjList = changes.length>0 && typeof changes[0]==='object';
+  const labels = isObjList ? changes.map(x=>x.label) : changes;
+  const entry = { t:Date.now(), c:labels.join(', ') };
+  if(isObjList) entry.fields = changes.map(x=>({label:x.label,from:x.from,to:x.to}));
+  h.unshift(entry);
   item.history=h.slice(0,8);
   item.updatedAt=Date.now();
-  if(changes.includes('รหัสผ่าน')) item.passUpdatedAt=Date.now();
+  const passChanged = isObjList ? changes.some(x=>x.key==='pass') : changes.includes('รหัสผ่าน');
+  if(passChanged) item.passUpdatedAt=Date.now();
   return item;
 }
 function pillFor(days){
@@ -1066,7 +1083,19 @@ function renderHistory(id){
   }
   box.innerHTML=`<div class="hist-box">
     <div class="hist-title">🕐 ประวัติการแก้ไข (${h.length})</div>
-    ${h.map(x=>`<div class="hist-row"><span class="hist-what">${x.c}</span><span class="hist-when">${fmtWhen(x.t)}</span></div>`).join('')}
+    ${h.map(x=>{
+      if(Array.isArray(x.fields) && x.fields.length){
+        return `<div class="hist-item">
+          <div class="hist-top"><span>${fmtWhen(x.t)}</span></div>
+          ${x.fields.map(f=>`<div class="hist-field"><b>${f.label}</b>
+            <span class="hist-old">${f.from||'(ว่าง)'}</span>
+            <span class="hist-arrow">→</span>
+            <span class="hist-new">${f.to||'(ว่าง)'}</span>
+          </div>`).join('')}
+        </div>`;
+      }
+      return `<div class="hist-row"><span class="hist-what">${x.c}</span><span class="hist-when">${fmtWhen(x.t)}</span></div>`;
+    }).join('')}
   </div>`;
 }
 function closeModal(){ document.getElementById('modal').classList.remove('open'); editId_entry=null; document.getElementById('hist-wrap').innerHTML=''; }
@@ -1114,7 +1143,7 @@ function saveEntry(){
     showToast(spread>0
       ? `✅ บันทึก ${now} น. + อัปเดตรหัสอีก ${spread} แอป`
       : (editId_entry
-          ? `✅ แก้ไข${changed.length?' '+changed.join(', '):''} เมื่อ ${now} น.`
+          ? `✅ แก้ไข${changed.length?' '+changed.map(x=>x.label).join(', '):''} เมื่อ ${now} น.`
           : `✅ เพิ่มบัญชีเรียบร้อย ${now} น.`),'#43e97b');
   });
   closeModal();
@@ -1232,7 +1261,7 @@ function saveGmailPass(){
   const g=groupByGmail()[gpassTarget];
   if(!g||g.linked.length===0){ showToast('⚠️ Gmail นี้ยังไม่มีแอปที่ผูกรหัส','#ffd166'); return; }
   showSyncStatus(false);
-  const jobs=g.linked.map(e=>saveEntries_remote(pushHistory({...e,pass:np,linkPass:true},['รหัสผ่าน (เปลี่ยนจากคลัง Gmail)'])));
+  const jobs=g.linked.map(e=>saveEntries_remote(pushHistory({...e,pass:np,linkPass:true},[{key:'pass',label:'รหัสผ่าน (เปลี่ยนจากคลัง Gmail)',from:e.pass||'',to:np}])));
   Promise.all(jobs).then(()=>{
     showSyncStatus(true);
     gpassVisible[gpassTarget]=true;
